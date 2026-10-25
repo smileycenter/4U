@@ -6646,6 +6646,83 @@ window.closeQuranPlayer = function() {
 
 
 
+
+// ==========================================
+        // 🎵 الحل الجذري لمشكلة شريط القرآن وتجميد القوائم
+        // ==========================================
+
+        // 1. حقن كود CSS إجباري لإخفاء الشريط تماماً عند الإغلاق
+        const fixQuranStyle = document.createElement('style');
+        fixQuranStyle.innerHTML = `
+            #quran-player-bar {
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+            #quran-player-bar:not(.active) {
+                transform: translateY(150%) !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+            #quran-player-bar.active {
+                transform: translateY(0) !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+        `;
+        document.head.appendChild(fixQuranStyle);
+
+        // 2. تأمين دالة الإغلاق (لتعمل عند الضغط على X)
+        window.closeQuranPlayer = function() { 
+            const bar = document.getElementById('quran-player-bar');
+            const audio = document.getElementById('quran-audio');
+            if(bar) bar.classList.remove('active');
+            if(audio) {
+                audio.pause();
+                audio.currentTime = 0; 
+            }
+        };
+
+        // 3. تأمين دالة التنقل (لحماية القوائم من الشلل نهائياً)
+        window.navigate = function(view) {
+            // محاولة إغلاق القرآن بأمان تام بدون أخطاء توقف الكود
+            try { 
+                window.closeQuranPlayer(); 
+            } catch(e) { console.error("تخطي إغلاق القرآن"); }
+
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active', 'border-teal-500', 'text-teal-600', 'bg-teal-50'));
+            const activeNav = document.getElementById(`nav-${view}`);
+            if(activeNav) activeNav.classList.add('active', 'border-teal-500', 'text-teal-600', 'bg-teal-50');
+            
+            const c = document.getElementById('content-area'); 
+            if(c) c.innerHTML = '';
+            
+            if(view==='dashboard') renderDashboard(c);
+            else if(view==='budget') renderBudget(c);
+            else if(view==='tasks') renderTasks(c);
+            else if(view==='schedules') renderSchedules(c);
+            else if(view==='plans') renderPlans(c);
+            else if(view==='shopping') renderShopping(c);
+            else if(view==='inventory') renderInventory(c);
+            else if(view==='housemap') renderHouseMap(c);
+            else if(view==='meals') renderMeals(c);
+            else if(view==='diet') renderDiet(c);
+            else if(view==='rewardsSys') renderRewardsSys(c);
+            else if(view==='goals') renderGoals(c);
+            else if(view==='adhkar') renderAdhkar(c);
+            else if(view==='prayer') renderPrayer(c);
+            else if(view==='fasting') renderFasting(c);
+            else if(view==='bedtime') renderBedtime(c);
+            else if(view==='quran') renderQuran(c);
+            else if(view==='hadith') renderHadith(c);
+            else if(view==='library') renderLibrary(c);
+            else if(view==='wardrobe') renderWardrobe(c);
+            else if(view==='settings') renderSettings(c);
+        };
+
+
+
+
         window.onload = () => { initApp(); };
 function runAutoResets() {
             const now = new Date();
