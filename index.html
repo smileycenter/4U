@@ -150,6 +150,26 @@
         }
 
 
+
+/* 🎵 إصلاح اختفاء شريط القرآن بالكامل عند الإغلاق */
+        #quran-player-bar:not(.active) {
+            transform: translateY(200px) !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            visibility: hidden !important;
+            transition: all 0.3s ease !important;
+        }
+        #quran-player-bar.active {
+            transform: translateY(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            visibility: visible !important;
+            transition: all 0.3s ease !important;
+        }
+
+
+
+
     </style>
 </head>
 <body class="text-slate-800 flex flex-col md:flex-row overflow-hidden relative" style="height: 100dvh;">
@@ -5503,8 +5523,19 @@ function showModal(t, c, b) {
         function closeFSModal() { document.getElementById('fullscreen-modal').classList.add('hidden'); document.getElementById('fullscreen-modal').classList.remove('flex'); }
         function showLoading(t) { document.getElementById('loading-text').innerText=t; document.getElementById('loading-overlay').classList.remove('hidden'); document.getElementById('loading-overlay').classList.add('flex'); }
         function hideLoading() { document.getElementById('loading-overlay').classList.add('hidden'); document.getElementById('loading-overlay').classList.remove('flex'); }
-        function closeQuranPlayer() { document.getElementById('quran-player-bar').classList.remove('active'); document.getElementById('quran-audio').pause(); }
-
+window.closeQuranPlayer = function() { 
+            const bar = document.getElementById('quran-player-bar');
+            const audio = document.getElementById('quran-audio');
+            
+            if(bar) {
+                bar.classList.remove('active');
+            }
+            if(audio) {
+                audio.pause();
+                // تصفير المقطع علشان لو شغلت سورة تانية متعملش تداخل
+                audio.currentTime = 0; 
+            }
+        };
 
 
 
