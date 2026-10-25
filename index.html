@@ -2,6 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
 
+
+
+<!-- إعدادات تطبيق الموبايل (PWA) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#14b8a6">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3239/3239952.png">
+    <meta name="mobile-web-app-capable" content="yes">
+
+
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>تطبيق عائلتي - الإصدار الشامل</title>
@@ -20,6 +30,7 @@
                 }
             }
         }
+
     </script>
     <style>
 
@@ -6759,6 +6770,25 @@ function runAutoResets() {
                 saveState();
             }
         }
+
+
+
+// ==========================================
+        // 📱 تسجيل تطبيق الموبايل (PWA Service Worker)
+        // ==========================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('✅ تم تسجيل تطبيق الموبايل بنجاح!', registration.scope);
+                })
+                .catch(error => {
+                    console.error('❌ فشل تسجيل تطبيق الموبايل:', error);
+                });
+            });
+        }
+
+
 
     </script>
 </body>
