@@ -3470,45 +3470,44 @@ function renderBedtime(c) {
                     <div class="bg-white p-6 rounded-2xl border shadow-sm border-t-4 border-t-red-500">
                         <h3 class="font-bold text-lg mb-4"><i class="fas fa-clipboard-list text-red-500 ml-2"></i> الخطة الأساسية ومواعيد الجيم</h3>
                         
-                        <!-- إعدادات الجيم والتنبيهات -->
-                        <div class="bg-slate-800 text-white p-4 rounded-xl mb-6 flex flex-col md:flex-row gap-4 items-center justify-between shadow-md">
-                            <div class="flex items-center gap-2 w-full md:w-auto">
-                                <i class="fas fa-clock text-brandOrange text-xl"></i>
-                                <span class="font-bold text-sm">مواعيد الجيم:</span>
-                            </div>
-                            <div class="flex gap-3 w-full md:w-auto items-center">
-                                <label class="text-xs">يفتح:</label>
-                                <input type="time" id="gym-open" value="${appState.settings.gym?.open || '06:00'}" class="border-none p-1.5 rounded bg-slate-700 outline-none text-xs font-bold text-white cursor-pointer">
-                                <label class="text-xs">يغلق:</label>
-                                <input type="time" id="gym-close" value="${appState.settings.gym?.close || '23:00'}" class="border-none p-1.5 rounded bg-slate-700 outline-none text-xs font-bold text-white cursor-pointer">
-                            </div>
-                            <div class="flex gap-2 items-center w-full md:w-auto border-t md:border-t-0 md:border-r border-slate-600 pt-3 md:pt-0 md:pr-4">
-                                <label class="text-xs font-bold text-brandOrange">تذكير تمريني الساعة:</label>
-                                <input type="time" id="gym-my-time" value="${appState.settings.gym?.myTime || '18:00'}" class="border-none p-1.5 rounded bg-white text-slate-900 outline-none text-sm font-bold w-24 cursor-pointer shadow-inner">
-                            </div>
-                            <button onclick="window.saveGymSettings()" class="w-full md:w-auto bg-brandOrange hover:bg-orange-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition shadow"><i class="fas fa-save"></i> حفظ الموعد</button>
-                        </div>
+<!-- جدول الجيم الأسبوعي المطور -->
+                        <div class="bg-slate-800 text-white p-5 rounded-2xl mb-6 shadow-lg">
+                            <h4 class="font-bold text-brandOrange mb-4 border-b border-slate-700 pb-2"><i class="fas fa-calendar-week"></i> جدول مواعيد الجيم وتمريناتي</h4>
+                            <div class="space-y-3">
+                                ${['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map(day => {
+                                    const dayData = appState.settings.gymSchedule?.[day] || { isOpen: true, open: '06:00', close: '23:00', isWorkoutDay: false, myTime: '18:00' };
+                                    return `
+                                    <div class="flex flex-col md:flex-row items-center justify-between bg-slate-700 p-3 rounded-lg gap-3 transition-all hover:bg-slate-600">
+                                        <div class="font-bold text-sm w-full md:w-20 text-brandOrange"><i class="fas fa-calendar-day opacity-50 ml-1"></i> ${day}</div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-5 rounded-xl border border-slate-200">
-                            <div><label class="text-xs font-bold block mb-1">فرد العائلة</label><select id="diet-member" class="w-full border p-2 rounded outline-none">${selectOptions}</select></div>
-                            <div><label class="text-xs font-bold block mb-1">الوزن الحالي (كجم)</label><input type="number" id="diet-w" class="w-full border p-2 rounded outline-none"></div>
-                            <div><label class="text-xs font-bold block mb-1">الهدف (الوزن المطلوب)</label><input type="number" id="diet-tw" class="w-full border p-2 rounded outline-none"></div>
-                            <div><label class="text-xs font-bold block mb-1">تفاصيل الـ InBody</label><input type="text" id="diet-inbody" placeholder="الدهون، العضلات..." class="w-full border p-2 rounded outline-none text-xs"></div>
-                            <div><label class="text-xs font-bold block mb-1">أيام التمرين أسبوعياً</label><input type="number" id="diet-days" placeholder="مثال: 4" class="w-full border p-2 rounded outline-none"></div>
-                            <div><label class="text-xs font-bold block mb-1">مكان ونوع التمرين</label>
-                                <select id="diet-gym" class="w-full border p-2 rounded outline-none text-xs">
-                                    <option value="في الجيم بأجهزة كاملة">في الجيم (أجهزة كاملة)</option>
-                                    <option value="في البيت ومتاح أوزان ودامبلز">في البيت (بأجهزة وأوزان)</option>
-                                    <option value="في البيت بوزن الجسم فقط">في البيت (بدون أجهزة)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                            <button onclick="generateDietPlan(false)" class="w-full bg-red-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-red-600 transition flex items-center justify-center gap-2"><i class="fas fa-magic"></i> توليد نظام حر</button>
-                            <button onclick="generateDietPlan(true)" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition flex items-center justify-center gap-2"><i class="fas fa-boxes"></i> توليد بناءً على المخزن</button>
-                        </div>
-                    </div>
+                                        <!-- حالة الجيم (مفتوح/مغلق) -->
+                                        <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg flex-1 justify-center md:justify-start w-full">
+                                            <label class="text-xs cursor-pointer flex items-center gap-2 select-none">
+                                                <input type="checkbox" id="gym-is-open-${day}" class="w-4 h-4 accent-brandOrange" ${dayData.isOpen ? 'checked' : ''} onchange="document.getElementById('gym-hours-${day}').style.opacity = this.checked ? '1' : '0.3'">
+                                                الجيم فاتح
+                                            </label>
+                                            <div id="gym-hours-${day}" class="flex gap-2 items-center transition-opacity" style="opacity: ${dayData.isOpen ? '1' : '0.3'}">
+                                                <span class="text-[10px] text-slate-400">من</span>
+                                                <input type="time" id="gym-open-${day}" value="${dayData.open}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
+                                                <span class="text-[10px] text-slate-400">لـ</span>
+                                                <input type="time" id="gym-close-${day}" value="${dayData.close}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
+                                            </div>
+                                        </div>
 
+                                        <!-- تمريني الشخصي -->
+                                        <div class="flex items-center gap-3 bg-slate-900 p-2 rounded-lg w-full md:w-auto justify-center">
+                                            <label class="text-xs cursor-pointer flex items-center gap-2 select-none text-teal-400 font-bold">
+                                                <input type="checkbox" id="gym-my-workout-${day}" class="w-4 h-4 accent-teal-500" ${dayData.isWorkoutDay ? 'checked' : ''} onchange="document.getElementById('gym-my-time-${day}').style.display = this.checked ? 'block' : 'none'">
+                                                هتمرن اليوم ده
+                                            </label>
+                                            <input type="time" id="gym-my-time-${day}" value="${dayData.myTime}" class="bg-white text-slate-900 text-xs p-1.5 rounded outline-none border-none font-bold w-24 text-center shadow-inner transition-all" style="display: ${dayData.isWorkoutDay ? 'block' : 'none'};">
+                                        </div>
+                                    </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                            <button onclick="window.saveGymSettings()" class="w-full mt-5 bg-gradient-to-r from-brandOrange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition shadow-md flex justify-center items-center gap-2"><i class="fas fa-save text-lg"></i> حفظ جدول الجيم ومواعيد التنبيهات</button>
+                        </div>
 
 
                     <!-- 2. إدخال اليوميات المطور -->
@@ -6756,14 +6755,28 @@ window.closeQuranPlayer = function() {
 
 
 
-// دالة حفظ مواعيد الجيم
+// دالة حفظ جدول الجيم والتنبيهات المخصصة للأيام
         window.saveGymSettings = function() {
-            if(!appState.settings.gym) appState.settings.gym = {};
-            appState.settings.gym.open = document.getElementById('gym-open').value;
-            appState.settings.gym.close = document.getElementById('gym-close').value;
-            appState.settings.gym.myTime = document.getElementById('gym-my-time').value;
+            if(!appState.settings.gymSchedule) appState.settings.gymSchedule = {};
+            const daysArr = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+
+            daysArr.forEach(day => {
+                appState.settings.gymSchedule[day] = {
+                    isOpen: document.getElementById(`gym-is-open-${day}`).checked,
+                    open: document.getElementById(`gym-open-${day}`).value,
+                    close: document.getElementById(`gym-close-${day}`).value,
+                    isWorkoutDay: document.getElementById(`gym-my-workout-${day}`).checked,
+                    myTime: document.getElementById(`gym-my-time-${day}`).value
+                };
+            });
+
             saveState();
-            alert("تم حفظ مواعيد الجيم وتفعيل منبه التذكير بنجاح! 🏋️‍♂️");
+            
+            // إعادة رسم الشاشة لتأكيد الحفظ
+            const c = document.getElementById('content-area');
+            if(c) { renderDiet(c); }
+            
+            alert("تم حفظ جدول الجيم ومواعيد التمارين بنجاح! 🏋️‍♂️ الإشعارات ستصلك فقط في الأيام المحددة للتمرين.");
         };
 
         // دالة زر ضبط مواقيت الصلاة (يمكن استدعاؤها من أي مكان)
@@ -6865,13 +6878,19 @@ window.closeQuranPlayer = function() {
                     }
                 });
 
-                // ب) تنبيه موعد التمرين والجيم
-                if(appState.settings.gym && appState.settings.gym.myTime === time24) {
-                    const notifKey = `gym_${todayDate}`;
-                    if (!nState.lastNotified[notifKey]) {
-                        nState.lastNotified[notifKey] = true;
-                        saveState();
-                        window.triggerPushAlert(`وقت الجيم يا بطل! 🏋️‍♂️`, `حان موعد تمرينك الآن (${time24}).. الجيم مفتوح من ${appState.settings.gym.open} إلى ${appState.settings.gym.close}.`, 'schedules');
+          // ب) تنبيه موعد التمرين والجيم بناءً على الجدول الأسبوعي
+                if(appState.settings.gymSchedule) {
+                    const todayGym = appState.settings.gymSchedule[todayName];
+                    // نتأكد إن النهارده متحدد كيوم تمرين + الوقت الحالي يطابق وقت التنبيه
+                    if (todayGym && todayGym.isWorkoutDay && todayGym.myTime === time24) {
+                        const notifKey = `gym_${todayDate}`;
+                        if (!nState.lastNotified[notifKey]) {
+                            nState.lastNotified[notifKey] = true;
+                            saveState();
+                            // إضافة رسالة تحفيزية بمعاد قفل الجيم علشان ميأجلش
+                            const msg = todayGym.isOpen ? `حان موعد تمرينك الآن (${time24}).. شد حيلك الجيم بيقفل الساعة ${todayGym.close}.` : `حان موعد تمرينك، لكن انتبه الجيم مسجل بأنه مغلق اليوم!`;
+                            window.triggerPushAlert(`وقت الجيم يا بطل! 🏋️‍♂️`, msg, 'schedules');
+                        }
                     }
                 }
 
