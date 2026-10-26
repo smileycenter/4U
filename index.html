@@ -3470,43 +3470,43 @@ function renderBedtime(c) {
                     <div class="bg-white p-6 rounded-2xl border shadow-sm border-t-4 border-t-red-500">
                         <h3 class="font-bold text-lg mb-4"><i class="fas fa-clipboard-list text-red-500 ml-2"></i> الخطة الأساسية ومواعيد الجيم</h3>
                         
-<!-- جدول الجيم الأسبوعي المطور -->
-                        <div class="bg-slate-800 text-white p-5 rounded-2xl mb-6 shadow-lg">
-                            <h4 class="font-bold text-brandOrange mb-4 border-b border-slate-700 pb-2"><i class="fas fa-calendar-week"></i> جدول مواعيد الجيم وتمريناتي</h4>
-                            <div class="space-y-3">
-                                ${['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map(day => {
-                                    const dayData = appState.settings.gymSchedule?.[day] || { isOpen: true, open: '06:00', close: '23:00', isWorkoutDay: false, myTime: '18:00' };
-                                    return `
-                                    <div class="flex flex-col md:flex-row items-center justify-between bg-slate-700 p-3 rounded-lg gap-3 transition-all hover:bg-slate-600">
-                                        <div class="font-bold text-sm w-full md:w-20 text-brandOrange"><i class="fas fa-calendar-day opacity-50 ml-1"></i> ${day}</div>
-
-                                        <!-- حالة الجيم (مفتوح/مغلق) -->
-                                        <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg flex-1 justify-center md:justify-start w-full">
-                                            <label class="text-xs cursor-pointer flex items-center gap-2 select-none">
-                                                <input type="checkbox" id="gym-is-open-${day}" class="w-4 h-4 accent-brandOrange" ${dayData.isOpen ? 'checked' : ''} onchange="document.getElementById('gym-hours-${day}').style.opacity = this.checked ? '1' : '0.3'">
-                                                الجيم فاتح
-                                            </label>
-                                            <div id="gym-hours-${day}" class="flex gap-2 items-center transition-opacity" style="opacity: ${dayData.isOpen ? '1' : '0.3'}">
-                                                <span class="text-[10px] text-slate-400">من</span>
-                                                <input type="time" id="gym-open-${day}" value="${dayData.open}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
-                                                <span class="text-[10px] text-slate-400">لـ</span>
-                                                <input type="time" id="gym-close-${day}" value="${dayData.close}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
-                                            </div>
-                                        </div>
-
-                                        <!-- تمريني الشخصي -->
-                                        <div class="flex items-center gap-3 bg-slate-900 p-2 rounded-lg w-full md:w-auto justify-center">
-                                            <label class="text-xs cursor-pointer flex items-center gap-2 select-none text-teal-400 font-bold">
-                                                <input type="checkbox" id="gym-my-workout-${day}" class="w-4 h-4 accent-teal-500" ${dayData.isWorkoutDay ? 'checked' : ''} onchange="document.getElementById('gym-my-time-${day}').style.display = this.checked ? 'block' : 'none'">
-                                                هتمرن اليوم ده
-                                            </label>
-                                            <input type="time" id="gym-my-time-${day}" value="${dayData.myTime}" class="bg-white text-slate-900 text-xs p-1.5 rounded outline-none border-none font-bold w-24 text-center shadow-inner transition-all" style="display: ${dayData.isWorkoutDay ? 'block' : 'none'};">
-                                        </div>
-                                    </div>
-                                    `;
-                                }).join('')}
+                        <!-- إعدادات الجيم والتنبيهات -->
+                        <div class="bg-slate-800 text-white p-4 rounded-xl mb-6 flex flex-col md:flex-row gap-4 items-center justify-between shadow-md">
+                            <div class="flex items-center gap-2 w-full md:w-auto">
+                                <i class="fas fa-clock text-brandOrange text-xl"></i>
+                                <span class="font-bold text-sm">مواعيد الجيم:</span>
                             </div>
-                            <button onclick="window.saveGymSettings()" class="w-full mt-5 bg-gradient-to-r from-brandOrange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition shadow-md flex justify-center items-center gap-2"><i class="fas fa-save text-lg"></i> حفظ جدول الجيم ومواعيد التنبيهات</button>
+                            <div class="flex gap-3 w-full md:w-auto items-center">
+                                <label class="text-xs">يفتح:</label>
+                                <input type="time" id="gym-open" value="${appState.settings.gym?.open || '06:00'}" class="border-none p-1.5 rounded bg-slate-700 outline-none text-xs font-bold text-white cursor-pointer">
+                                <label class="text-xs">يغلق:</label>
+                                <input type="time" id="gym-close" value="${appState.settings.gym?.close || '23:00'}" class="border-none p-1.5 rounded bg-slate-700 outline-none text-xs font-bold text-white cursor-pointer">
+                            </div>
+                            <div class="flex gap-2 items-center w-full md:w-auto border-t md:border-t-0 md:border-r border-slate-600 pt-3 md:pt-0 md:pr-4">
+                                <label class="text-xs font-bold text-brandOrange">تذكير تمريني الساعة:</label>
+                                <input type="time" id="gym-my-time" value="${appState.settings.gym?.myTime || '18:00'}" class="border-none p-1.5 rounded bg-white text-slate-900 outline-none text-sm font-bold w-24 cursor-pointer shadow-inner">
+                            </div>
+                            <button onclick="window.saveGymSettings()" class="w-full md:w-auto bg-brandOrange hover:bg-orange-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition shadow"><i class="fas fa-save"></i> حفظ الموعد</button>
+                        </div>
+
+<!-- إعادة شكل حقول إعداد الخطة الأساسية بالكامل -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-5 rounded-xl border border-slate-200">
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">فرد العائلة</label><select id="diet-member" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white focus:border-teal-400">${selectOptions}</select></div>
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">الوزن الحالي (كجم)</label><input type="number" id="diet-w" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-teal-400"></div>
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">الهدف (الوزن المطلوب)</label><input type="number" id="diet-tw" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-teal-400"></div>
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">تفاصيل الـ InBody</label><input type="text" id="diet-inbody" placeholder="الدهون، العضلات..." class="w-full border border-slate-300 p-2.5 rounded-lg outline-none text-xs focus:border-teal-400"></div>
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">أيام التمرين أسبوعياً</label><input type="number" id="diet-days" placeholder="مثال: 4" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-teal-400"></div>
+                            <div><label class="text-xs font-bold block mb-1 text-slate-700">مكان ونوع التمرين</label>
+                                <select id="diet-gym" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none text-xs bg-white focus:border-teal-400">
+                                    <option value="في الجيم بأجهزة كاملة">في الجيم (أجهزة كاملة)</option>
+                                    <option value="في البيت ومتاح أوزان ودامبلز">في البيت (بأجهزة وأوزان)</option>
+                                    <option value="في البيت بوزن الجسم فقط">في البيت (بدون أجهزة)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <button onclick="generateDietPlan(false)" class="w-full bg-[#ef4444] text-white py-3 rounded-xl font-bold shadow-md hover:bg-red-600 transition flex items-center justify-center gap-2"><i class="fas fa-magic"></i> توليد نظام حر</button>
+                            <button onclick="generateDietPlan(true)" class="w-full bg-[#059669] text-white py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition flex items-center justify-center gap-2"><i class="fas fa-boxes"></i> توليد بناءً على المخزن</button>
                         </div>
 
 
@@ -6755,28 +6755,14 @@ window.closeQuranPlayer = function() {
 
 
 
-// دالة حفظ جدول الجيم والتنبيهات المخصصة للأيام
+// دالة حفظ مواعيد الجيم
         window.saveGymSettings = function() {
-            if(!appState.settings.gymSchedule) appState.settings.gymSchedule = {};
-            const daysArr = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-
-            daysArr.forEach(day => {
-                appState.settings.gymSchedule[day] = {
-                    isOpen: document.getElementById(`gym-is-open-${day}`).checked,
-                    open: document.getElementById(`gym-open-${day}`).value,
-                    close: document.getElementById(`gym-close-${day}`).value,
-                    isWorkoutDay: document.getElementById(`gym-my-workout-${day}`).checked,
-                    myTime: document.getElementById(`gym-my-time-${day}`).value
-                };
-            });
-
+            if(!appState.settings.gym) appState.settings.gym = {};
+            appState.settings.gym.open = document.getElementById('gym-open').value;
+            appState.settings.gym.close = document.getElementById('gym-close').value;
+            appState.settings.gym.myTime = document.getElementById('gym-my-time').value;
             saveState();
-            
-            // إعادة رسم الشاشة لتأكيد الحفظ
-            const c = document.getElementById('content-area');
-            if(c) { renderDiet(c); }
-            
-            alert("تم حفظ جدول الجيم ومواعيد التمارين بنجاح! 🏋️‍♂️ الإشعارات ستصلك فقط في الأيام المحددة للتمرين.");
+            alert("تم حفظ مواعيد الجيم وتفعيل منبه التذكير بنجاح! 🏋️‍♂️");
         };
 
         // دالة زر ضبط مواقيت الصلاة (يمكن استدعاؤها من أي مكان)
@@ -6878,19 +6864,13 @@ window.closeQuranPlayer = function() {
                     }
                 });
 
-          // ب) تنبيه موعد التمرين والجيم بناءً على الجدول الأسبوعي
-                if(appState.settings.gymSchedule) {
-                    const todayGym = appState.settings.gymSchedule[todayName];
-                    // نتأكد إن النهارده متحدد كيوم تمرين + الوقت الحالي يطابق وقت التنبيه
-                    if (todayGym && todayGym.isWorkoutDay && todayGym.myTime === time24) {
-                        const notifKey = `gym_${todayDate}`;
-                        if (!nState.lastNotified[notifKey]) {
-                            nState.lastNotified[notifKey] = true;
-                            saveState();
-                            // إضافة رسالة تحفيزية بمعاد قفل الجيم علشان ميأجلش
-                            const msg = todayGym.isOpen ? `حان موعد تمرينك الآن (${time24}).. شد حيلك الجيم بيقفل الساعة ${todayGym.close}.` : `حان موعد تمرينك، لكن انتبه الجيم مسجل بأنه مغلق اليوم!`;
-                            window.triggerPushAlert(`وقت الجيم يا بطل! 🏋️‍♂️`, msg, 'schedules');
-                        }
+                // ب) تنبيه موعد التمرين والجيم
+                if(appState.settings.gym && appState.settings.gym.myTime === time24) {
+                    const notifKey = `gym_${todayDate}`;
+                    if (!nState.lastNotified[notifKey]) {
+                        nState.lastNotified[notifKey] = true;
+                        saveState();
+                        window.triggerPushAlert(`وقت الجيم يا بطل! 🏋️‍♂️`, `حان موعد تمرينك الآن (${time24}).. الجيم مفتوح من ${appState.settings.gym.open} إلى ${appState.settings.gym.close}.`, 'schedules');
                     }
                 }
 
@@ -7000,6 +6980,487 @@ window.closeQuranPlayer = function() {
                 navigator.serviceWorker.register('./sw.js').catch(err => console.log(err));
             });
         }
+
+
+
+
+
+
+// ==========================================
+        // 🚀 التحديث الشامل: جدول الجيم الأسبوعي + مواقيت الصلاة التلقائية + الإشعارات
+        // ==========================================
+
+        // 1. جلب مواقيت الصلاة تلقائياً عبر الإنترنت (API)
+        window.fetchPrayerTimesAuto = async function() {
+            showLoading("جاري جلب المواقيت الدقيقة من الإنترنت 🌐...");
+            try {
+                // استخدام API الهيئة المصرية العامة للمساحة (method=5)
+                const res = await fetch('https://api.aladhan.com/v1/timingsByCity?city=Cairo&country=Egypt&method=5');
+                const data = await res.json();
+                if(data && data.data && data.data.timings) {
+                    const t = data.data.timings;
+                    document.getElementById('pt-fajr').value = t.Fajr;
+                    document.getElementById('pt-dhuhr').value = t.Dhuhr;
+                    document.getElementById('pt-asr').value = t.Asr;
+                    document.getElementById('pt-maghrib').value = t.Maghrib;
+                    document.getElementById('pt-isha').value = t.Isha;
+                    hideLoading();
+                    alert("✅ تم جلب المواقيت بنجاح! راجعها ثم اضغط (حفظ المواقيت).");
+                }
+            } catch(e) {
+                hideLoading();
+                alert("حدث خطأ أثناء الاتصال بالإنترنت. يرجى إدخالها يدوياً.");
+            }
+        };
+
+        window.editPrayerTimes = function() {
+            if(!appState.settings.prayerTimes) appState.settings.prayerTimes = { 'الفجر': '04:30', 'الظهر': '12:00', 'العصر': '15:30', 'المغرب': '18:00', 'العشاء': '19:30' };
+            const pt = appState.settings.prayerTimes;
+
+            showModal("ضبط مواقيت الأذان 🕌", `
+                <div class="space-y-4" dir="rtl">
+                    <div class="flex justify-between items-center bg-indigo-50 p-3 rounded-xl border border-indigo-100 shadow-sm mb-4">
+                        <p class="text-xs text-indigo-800 font-bold">تحديث تلقائي لمواقيت مصر:</p>
+                        <button onclick="window.fetchPrayerTimesAuto()" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition flex items-center gap-2"><i class="fas fa-wifi"></i> جلب من الإنترنت</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border"><label class="font-bold text-teal-700 w-1/3">الفجر</label><input type="time" id="pt-fajr" value="${pt['الفجر']}" class="border p-2 rounded flex-1 outline-none text-center font-bold"></div>
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border"><label class="font-bold text-teal-700 w-1/3">الظهر</label><input type="time" id="pt-dhuhr" value="${pt['الظهر']}" class="border p-2 rounded flex-1 outline-none text-center font-bold"></div>
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border"><label class="font-bold text-teal-700 w-1/3">العصر</label><input type="time" id="pt-asr" value="${pt['العصر']}" class="border p-2 rounded flex-1 outline-none text-center font-bold"></div>
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border"><label class="font-bold text-teal-700 w-1/3">المغرب</label><input type="time" id="pt-maghrib" value="${pt['المغرب']}" class="border p-2 rounded flex-1 outline-none text-center font-bold"></div>
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border"><label class="font-bold text-teal-700 w-1/3">العشاء</label><input type="time" id="pt-isha" value="${pt['العشاء']}" class="border p-2 rounded flex-1 outline-none text-center font-bold"></div>
+                </div>
+            `, [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
+                {text: "حفظ المواقيت وتفعيل الإشعار", class: "bg-teal-600 text-white w-full", onClick: () => {
+                    appState.settings.prayerTimes['الفجر'] = document.getElementById('pt-fajr').value;
+                    appState.settings.prayerTimes['الظهر'] = document.getElementById('pt-dhuhr').value;
+                    appState.settings.prayerTimes['العصر'] = document.getElementById('pt-asr').value;
+                    appState.settings.prayerTimes['المغرب'] = document.getElementById('pt-maghrib').value;
+                    appState.settings.prayerTimes['العشاء'] = document.getElementById('pt-isha').value;
+                    saveState();
+                    alert("تم حفظ مواقيت الصلاة وتفعيل الإشعارات بنجاح! 🕋");
+                }}
+            ]);
+        };
+
+        // 2. تحديث قسم النظام الغذائي ليحتوي على جدول الجيم الأسبوعي
+// ==========================================
+        // الدالة الشاملة للنظام الغذائي (تم إرجاع التصميم القديم المطابق للصور بالملي)
+        // ==========================================
+        window.renderDiet = function(c) {
+            if(!appState.dailyFitness) appState.dailyFitness = { husband: [], wife: [], aseel: [], aser: [] };
+            saveState();
+
+            const members = Object.keys(appState.profiles);
+            members.forEach(k => { appState.dailyFitness[k].forEach(log => { if(!log.id) log.id = generateId(); }); });
+            const selectOptions = members.map(k=>`<option value="${k}">${appState.profiles[k].name}</option>`).join('');
+
+            // تجهيز أرشيف اليوميات
+            let logsHtml = '';
+            if (members.every(k => appState.dailyFitness[k].length === 0)) {
+                logsHtml = '<p class="text-center text-slate-400 py-10 font-bold text-lg">لا توجد يوميات مسجلة.</p>';
+            } else {
+                members.forEach(k => {
+                    appState.dailyFitness[k].forEach(log => {
+                        let mealsHtml = '<span class="text-slate-400 text-xs">لا يوجد وجبات</span>';
+                        if (log.meals && typeof log.meals === 'object') {
+                            let parts = [`<span class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-bold border border-orange-200">يوم ${log.meals.day || ''}</span>`];
+                            if (log.meals.bf) parts.push(`<span class="bg-white border px-2 py-1 rounded"><b>فطار:</b> ${log.meals.bf}</span>`);
+                            if (log.meals.lu) parts.push(`<span class="bg-white border px-2 py-1 rounded"><b>غداء:</b> ${log.meals.lu}</span>`);
+                            if (log.meals.sn) parts.push(`<span class="bg-white border px-2 py-1 rounded"><b>سناك:</b> ${log.meals.sn}</span>`);
+                            if (log.meals.dn) parts.push(`<span class="bg-white border px-2 py-1 rounded"><b>عشاء:</b> ${log.meals.dn}</span>`);
+                            mealsHtml = `<div class="flex flex-wrap gap-2 text-xs">${parts.join('')}</div>`;
+                        } else if (log.meals) { mealsHtml = log.meals; }
+
+                        let workoutHtml = '<span class="text-slate-400 text-xs font-bold bg-slate-100 px-3 py-1 rounded">يوم راحة ☕ (لا يوجد تمارين)</span>';
+                        if (log.workouts && Array.isArray(log.workouts) && log.workouts.length > 0) {
+                            workoutHtml = log.workouts.map(d => {
+                                let exs = d.exercises.map(ex => {
+                                    let imgHtml = '<div class="w-12 h-12 rounded bg-slate-200 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fas fa-image"></i></div>';
+                                    if (ex.imgs && ex.imgs.length > 0) {
+                                        let thumbs = ex.imgs.map(imgData => {
+                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
+                                            return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
+                                        }).join('');
+                                        imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
+                                    }
+                                    return `
+                                        <div class="flex flex-col gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                            <div class="flex flex-wrap items-center justify-between border-b border-slate-200 pb-2 mb-1 gap-2">
+                                                <div class="font-bold text-sm text-slate-800"><i class="fas fa-dumbbell text-slate-400 ml-1"></i> ${ex.name}</div>
+                                                <div class="text-[11px] text-brandOrange font-bold bg-orange-50 px-2 py-1 rounded border border-orange-100">${ex.sets} مجاميع × ${ex.reps} عدة</div>
+                                            </div>
+                                            <div class="flex items-center gap-2">${imgHtml}</div>
+                                        </div>`;
+                                }).join('');
+                                return `
+                                    <div class="bg-white border border-slate-200 rounded-xl p-3 mb-2 shadow-sm">
+                                        <h5 class="font-bold text-slate-800 text-sm mb-3 border-b pb-2 bg-slate-50 p-2 rounded">اليوم الرياضي رقم (${d.dayIndex})</h5>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${exs}</div>
+                                    </div>`;
+                            }).join('');
+                        } else if (log.workout) { workoutHtml = log.workout; }
+
+                        let watchImgsHtml = '';
+                        if (log.watchImages && log.watchImages.length > 0) {
+                            let wImgs = log.watchImages.map(img => {
+                                const safeImg = `data:image/jpeg;base64,${img}`;
+                                return `<img src="${safeImg}" class="w-16 h-16 rounded-lg object-cover cursor-pointer border shadow-sm hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
+                            }).join('');
+                            watchImgsHtml = `<div class="flex flex-wrap gap-2 mt-2">${wImgs}</div>`;
+                        }
+
+                        logsHtml += `
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative mb-4 hover:shadow-md transition">
+                            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                <div>
+                                    <h4 class="font-bold text-blue-800 text-lg">${appState.profiles[k].name}</h4>
+                                    <span class="text-xs text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded-md mt-1 inline-block"><i class="far fa-calendar-alt"></i> ${log.date}</span>
+                                </div>
+                                <button onclick="delDailyLog('${k}', '${log.id}')" class="text-red-500 bg-red-50 hover:bg-red-500 hover:text-white w-8 h-8 rounded-lg text-sm transition flex items-center justify-center" title="حذف السجل"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                                    <h5 class="text-sm font-bold text-brandOrange mb-3"><i class="fas fa-utensils"></i> الوجبات:</h5>
+                                    ${mealsHtml}
+                                </div>
+                                <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
+                                    <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-dumbbell"></i> سجل التمارين المنجزة:</h5>
+                                    ${workoutHtml}
+                                </div>
+                                <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row gap-4 items-start">
+                                    <div class="flex-1">
+                                        <h5 class="text-sm font-bold text-blue-700 mb-2"><i class="fas fa-watch"></i> ملاحظات وبيانات النشاط:</h5>
+                                        <p class="text-xs text-slate-600 font-medium leading-relaxed">${log.watchStats || 'لا يوجد ملاحظات نصية'}</p>
+                                    </div>
+                                    ${watchImgsHtml}
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+                });
+            }
+
+            // تجهيز جدول الجيم الأسبوعي
+            const daysArr = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+            let gymWeeklyHtml = daysArr.map(day => {
+                const dayData = appState.settings.gymSchedule?.[day] || { isOpen: true, open: '06:00', close: '23:00', isWorkoutDay: false, myTime: '18:00' };
+                return `
+                <div class="flex flex-col md:flex-row items-center justify-between bg-slate-700 p-3 rounded-lg gap-3 transition-all hover:bg-slate-600">
+                    <div class="font-bold text-sm w-full md:w-20 text-brandOrange"><i class="fas fa-calendar-day opacity-50 ml-1"></i> ${day}</div>
+                    <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg flex-1 justify-center md:justify-start w-full">
+                        <label class="text-xs cursor-pointer flex items-center gap-2 select-none">
+                            <input type="checkbox" id="gym-is-open-${day}" class="w-4 h-4 accent-brandOrange" ${dayData.isOpen ? 'checked' : ''} onchange="document.getElementById('gym-hours-${day}').style.opacity = this.checked ? '1' : '0.3'">
+                            الجيم فاتح
+                        </label>
+                        <div id="gym-hours-${day}" class="flex gap-2 items-center transition-opacity" style="opacity: ${dayData.isOpen ? '1' : '0.3'}">
+                            <span class="text-[10px] text-slate-400">من</span>
+                            <input type="time" id="gym-open-${day}" value="${dayData.open}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
+                            <span class="text-[10px] text-slate-400">لـ</span>
+                            <input type="time" id="gym-close-${day}" value="${dayData.close}" class="bg-slate-600 text-xs p-1 rounded outline-none border-none text-white w-20">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 bg-slate-900 p-2 rounded-lg w-full md:w-auto justify-center">
+                        <label class="text-xs cursor-pointer flex items-center gap-2 select-none text-teal-400 font-bold">
+                            <input type="checkbox" id="gym-my-workout-${day}" class="w-4 h-4 accent-teal-500" ${dayData.isWorkoutDay ? 'checked' : ''} onchange="document.getElementById('gym-my-time-${day}').style.display = this.checked ? 'block' : 'none'">
+                            هتمرن اليوم
+                        </label>
+                        <input type="time" id="gym-my-time-${day}" value="${dayData.myTime}" class="bg-white text-slate-900 text-xs p-1.5 rounded outline-none border-none font-bold w-24 text-center shadow-inner transition-all" style="display: ${dayData.isWorkoutDay ? 'block' : 'none'};">
+                    </div>
+                </div>`;
+            }).join('');
+
+            // بناء واجهة الشاشة
+            c.innerHTML = `
+                <div class="fade-in space-y-6 pb-20">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-heartbeat text-red-500 ml-2"></i> المدرب الشخصي الذكي</h2>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="syncWithGemini('diet')" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                            <button onclick="document.getElementById('daily-logs-section').scrollIntoView({behavior:'smooth'})" class="text-sm bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold shadow-sm">متابعة يومي</button>
+                            <button onclick="document.getElementById('diet-logs-section').scrollIntoView({behavior:'smooth'})" class="text-sm bg-red-100 text-red-700 px-3 py-2 rounded-lg font-bold shadow-sm">الأرشيف</button>
+                        </div>
+                    </div>
+
+                    <!-- 1. إعدادات الخطة الأساسية ومواعيد الجيم -->
+                    <div class="bg-white p-6 rounded-2xl border shadow-sm border-t-4 border-t-red-500">
+                        
+                        <!-- جدول الجيم الأسبوعي -->
+                        <div class="bg-slate-800 text-white p-5 rounded-2xl mb-6 shadow-lg">
+                            <h4 class="font-bold text-brandOrange mb-4 border-b border-slate-700 pb-2"><i class="fas fa-calendar-week"></i> جدول مواعيد الجيم وتمريناتي الأسبوعية</h4>
+                            <div class="space-y-3">${gymWeeklyHtml}</div>
+                            <button onclick="window.saveGymSettings()" class="w-full mt-5 bg-gradient-to-r from-brandOrange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition shadow-md flex justify-center items-center gap-2"><i class="fas fa-save text-lg"></i> حفظ جدول الجيم ومواعيد التنبيهات</button>
+                        </div>
+                        
+                        <!-- المربع القديم اللي طلبته بالضبط بنفس الشكل والأزرار -->
+                        <div class="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-right" dir="rtl">
+                                <!-- الصف الأول -->
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">فرد العائلة</label>
+                                    <select id="diet-member" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white focus:border-teal-400 text-slate-800 font-bold">${selectOptions}</select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">الوزن الحالي (كجم)</label>
+                                    <input type="number" id="diet-w" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white text-slate-800 text-sm focus:border-teal-400 transition">
+                                </div>
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">الهدف (الوزن المطلوب)</label>
+                                    <input type="text" id="diet-tw" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white text-slate-800 text-sm focus:border-teal-400 transition">
+                                </div>
+
+                                <!-- الصف الثاني -->
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">تفاصيل الـ InBody</label>
+                                    <input type="text" id="diet-inbody" placeholder="الدهون، العضلات..." class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white text-slate-800 text-sm focus:border-teal-400 transition">
+                                </div>
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">أيام التمرين أسبوعياً</label>
+                                    <input type="number" id="diet-days" placeholder="مثال: 4" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white text-slate-800 text-sm focus:border-teal-400 transition">
+                                </div>
+                                <div>
+                                    <label class="text-sm font-bold block mb-2 text-slate-800">مكان ونوع التمرين</label>
+                                    <select id="diet-gym" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none bg-white text-slate-800 text-sm focus:border-teal-400 transition font-bold">
+                                        <option value="في الجيم بأجهزة كاملة">في الجيم (أجهزة كاملة)</option>
+                                        <option value="في البيت ومتاح أوزان ودامبلز">في البيت (بأجهزة وأوزان)</option>
+                                        <option value="في البيت بوزن الجسم فقط">في البيت (بدون أجهزة)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- أزرار التوليد مطابقة للصورة تماماً -->
+                        <div class="flex flex-col md:flex-row gap-4 mt-6" dir="rtl">
+                            <button onclick="generateDietPlan(false)" class="flex-1 bg-[#ef4444] text-white py-4 rounded-xl font-bold shadow-md hover:bg-red-600 transition flex items-center justify-center gap-2 text-lg">
+                                توليد نظام حر <i class="fas fa-pen"></i>
+                            </button>
+                            <button onclick="generateDietPlan(true)" class="flex-1 bg-[#10b981] text-white py-4 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition flex items-center justify-center gap-2 text-lg">
+                                توليد بناءً على المخزن <i class="fas fa-boxes"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. إدخال التقرير اليومي/الأسبوعي -->
+                    <div class="bg-white p-6 rounded-2xl border shadow-sm border-t-4 border-t-blue-500 mt-6 relative">
+                        <div class="flex justify-between items-center mb-6 border-b pb-4">
+                            <h3 class="font-bold text-xl text-blue-800"><i class="fas fa-pen text-blue-500 ml-2"></i> إدخال التقرير اليومي/الأسبوعي</h3>
+                            <div class="flex items-center gap-2 bg-blue-50 p-2 rounded-xl border border-blue-100">
+                                <label class="text-sm font-bold text-blue-800">تسجيل لـ:</label>
+                                <select id="log-member" onchange="window.loadWorkoutDraft()" class="border p-1.5 rounded-lg outline-none bg-white text-blue-900 font-bold shadow-sm cursor-pointer">${selectOptions}</select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-8" id="workout-builder-wrapper" oninput="window.saveWorkoutDraft()" onchange="window.saveWorkoutDraft()">
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-inner">
+                                <div class="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
+                                    <h4 class="font-bold text-brandOrange text-lg"><i class="fas fa-utensils"></i> سجل الوجبات</h4>
+                                    <select id="log-meal-day" class="border p-2 rounded-lg outline-none font-bold text-sm bg-white text-brandOrange shadow-sm cursor-pointer">
+                                        <option value="السبت">السبت</option><option value="الأحد">الأحد</option><option value="الإثنين">الإثنين</option><option value="الثلاثاء">الثلاثاء</option><option value="الأربعاء">الأربعاء</option><option value="الخميس">الخميس</option><option value="الجمعة">الجمعة</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div><label class="text-xs font-bold text-slate-500 mb-1 block">الفطار</label><input type="text" id="log-m-bf" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-brandOrange text-sm"></div>
+                                    <div><label class="text-xs font-bold text-slate-500 mb-1 block">الغداء</label><input type="text" id="log-m-lu" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-brandOrange text-sm"></div>
+                                    <div><label class="text-xs font-bold text-slate-500 mb-1 block">سناك</label><input type="text" id="log-m-sn" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-brandOrange text-sm"></div>
+                                    <div><label class="text-xs font-bold text-slate-500 mb-1 block">العشاء</label><input type="text" id="log-m-dn" class="w-full border border-slate-300 p-2.5 rounded-lg outline-none focus:border-brandOrange text-sm"></div>
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-inner">
+                                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3 border-b border-slate-200 pb-3">
+                                    <div class="flex items-center gap-4 flex-wrap">
+                                        <h4 class="font-bold text-slate-800 text-lg"><i class="fas fa-dumbbell text-slate-600"></i> سجل التمارين</h4>
+                                        <label class="flex items-center cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                            <input type="checkbox" id="is-workout-day-toggle" checked onchange="window.toggleWorkoutSection(this.checked); window.saveWorkoutDraft();" class="w-4 h-4 accent-brandOrange cursor-pointer">
+                                            <span class="ml-2 mr-2 text-xs font-bold text-slate-700 select-none">هل يوجد تمرين اليوم؟</span>
+                                        </label>
+                                        <button onclick="window.manualSaveDraftAlert()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1"><i class="fas fa-cloud-upload-alt"></i> حفظ القالب للسحابة</button>
+                                    </div>
+                                    <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                        <label class="text-xs font-bold text-slate-600">أيام التمرين في الأسبوع:</label>
+                                        <input type="number" id="log-wo-days-count" min="0" max="7" value="0" oninput="window.buildWorkoutDaysUI(this.value)" class="w-12 border p-1 rounded text-center font-bold outline-none focus:border-blue-500 text-slate-800 bg-slate-50">
+                                    </div>
+                                </div>
+                                <div id="workout-builder-wrapper-inner" class="transition-all duration-300 ease-in-out origin-top">
+                                    <div id="wo-days-container" class="space-y-4"><p class="text-xs text-slate-400 font-bold text-center bg-white py-6 rounded-xl border border-dashed border-slate-300">حدد عدد الأيام بالأعلى لفتح جداول التمارين.</p></div>
+                                </div>
+                            </div>
+                            <div class="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-inner">
+                                <h4 class="font-bold text-blue-800 text-lg mb-4 border-b border-blue-200 pb-3"><i class="fas fa-watch"></i> بيانات وصور المتابعة</h4>
+                                <div class="flex flex-col md:flex-row gap-4">
+                                    <div class="flex-1 w-full md:w-1/3">
+                                        <input type="file" id="watch-img-input" accept="image/*" multiple class="hidden" onchange="window.handleWatchImagesUpload(event)">
+                                        <button onclick="document.getElementById('watch-img-input').click()" class="w-full bg-blue-600 text-white p-3 rounded-xl font-bold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"><i class="fas fa-images"></i> رفع سكرين شوت (متعدد)</button>
+                                        <textarea id="log-watch-stats" rows="2" placeholder="ملاحظات إضافية، خطوات، حرق سعرات (اختياري)..." class="w-full border border-blue-200 p-3 rounded-xl outline-none text-sm mt-3 focus:border-blue-400 shadow-sm"></textarea>
+                                    </div>
+                                    <div id="watch-thumbnails-container" class="flex-1 w-full md:w-2/3 flex flex-wrap gap-2 items-start justify-end p-3 bg-white rounded-xl border border-blue-100 min-h-[120px] overflow-y-auto shadow-sm">
+                                        <span class="text-xs text-slate-400 my-auto mx-auto font-bold">الصور المرفوعة ستظهر هنا</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="window.saveDailyFitnessLog()" class="mt-8 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-black text-xl shadow-lg hover:scale-[1.01] transition-all flex items-center justify-center gap-2"><i class="fas fa-save text-2xl"></i> حفظ اليومية وإضافتها لسجل المتابعة</button>
+                    </div>
+
+                    <!-- 3. الأرشيف الشامل -->
+                    <div id="daily-logs-section" class="bg-slate-100 p-6 rounded-2xl border border-slate-200 shadow-inner mt-6">
+                        <h3 class="font-bold text-lg mb-6 border-b pb-2 text-slate-700"><i class="fas fa-history text-blue-600 ml-2"></i> أرشيف المتابعة الشامل</h3>
+                        <div class="space-y-6 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">${logsHtml}</div>
+                    </div>
+
+                    <!-- 4. التقارير وتحليل الأداء -->
+                    <div class="bg-white p-6 rounded-2xl border shadow-sm border-t-4 border-t-orange-500 mt-6">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="font-bold text-lg"><i class="fas fa-brain text-orange-500 ml-2"></i> تقارير وتحليل الأداء</h3>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm font-bold text-slate-600">تحليل أداء:</label>
+                                <select id="report-member" class="border p-1 rounded-lg outline-none bg-orange-50 text-orange-800 font-bold">${selectOptions}</select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-gradient-to-r from-orange-500 to-red-500 text-white p-5 rounded-2xl shadow-md flex flex-col justify-between transition">
+                                <div class="text-center mb-3"><i class="fas fa-sync-alt block text-3xl mb-1"></i><span class="font-bold text-lg block">تعديل النظام آلياً</span><span class="text-xs font-normal opacity-90">بناءً على يوميات العميل</span></div>
+                                <div class="flex gap-2 mt-auto">
+                                    <button onclick="adjustPlanAI(false)" class="flex-1 bg-white/20 hover:bg-white/30 py-2 rounded-lg text-xs font-bold transition">تعديل حر</button>
+                                    <button onclick="adjustPlanAI(true)" class="flex-1 bg-white text-orange-600 hover:bg-slate-100 py-2 rounded-lg text-xs font-bold transition shadow-sm"><i class="fas fa-boxes"></i> من المخزن</button>
+                                </div>
+                            </div>
+                            <button onclick="evaluateDietAI()" class="bg-gradient-to-r from-amber-400 to-yellow-500 text-white p-5 rounded-2xl shadow-md flex flex-col items-center justify-center transition hover:scale-[1.02] mb-4 md:mb-0"><i class="fas fa-medal block text-3xl mb-1"></i><span class="font-bold text-lg block text-yellow-900">تقييم ومكافأة المدرب</span><span class="text-xs font-bold text-yellow-800 opacity-90">تقييم اليوميات وإعطاء نجوم</span></button>
+                            <button onclick="generateProgressReportAI()" class="md:col-span-2 bg-gradient-to-r from-teal-500 to-blue-500 text-white p-5 rounded-2xl shadow-md flex flex-col items-center justify-center transition hover:scale-[1.02]"><i class="fas fa-chart-line block text-3xl mb-1"></i><span class="font-bold text-lg block">تقرير التحسن الشامل</span><span class="text-xs font-normal opacity-90">تحليل تطور هذا الفرد</span></button>
+                        </div>
+                    </div>
+
+                    <!-- 5. أرشيف الأنظمة والتقارير -->
+                    <div id="diet-logs-section" class="bg-white p-6 rounded-2xl border shadow-sm mt-8">
+                        <h3 class="font-bold text-lg mb-4 border-b pb-2"><i class="fas fa-history ml-2 text-slate-500"></i> أرشيف الأنظمة والتقارير</h3>
+                        <div class="space-y-4">
+                            ${(!appState.dietPlansLog || appState.dietPlansLog.length === 0) ? '<p class="text-center text-slate-400 py-4">لا توجد سجلات حالياً.</p>' : 
+                                appState.dietPlansLog.map((log, i) => `
+                                <div class="border rounded-xl p-4 bg-slate-50 shadow-sm relative">
+                                    <div class="flex justify-between items-center mb-3 border-b pb-2"><h4 class="font-bold text-red-700 text-lg">${log.memberName} - <span class="text-sm text-slate-500 font-normal">${log.date}</span></h4><div class="flex gap-2"><button onclick="editDietPlan(${i})" id="edit-diet-btn-${i}" class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-edit"></i> تعديل</button><button onclick="delDietPlan(${i})" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-trash"></i> حذف</button></div></div>
+                                    <div id="diet-content-${i}" class="text-sm prose max-w-none bg-white p-4 rounded-lg border outline-none transition-all leading-relaxed" contenteditable="false">${log.content}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { window.loadWorkoutDraft(); }, 100);
+        };
+
+
+
+
+
+
+
+
+
+
+
+
+        window.saveGymSettings = function() {
+            if(!appState.settings.gymSchedule) appState.settings.gymSchedule = {};
+            const daysArr = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+
+            daysArr.forEach(day => {
+                appState.settings.gymSchedule[day] = {
+                    isOpen: document.getElementById(`gym-is-open-${day}`).checked,
+                    open: document.getElementById(`gym-open-${day}`).value,
+                    close: document.getElementById(`gym-close-${day}`).value,
+                    isWorkoutDay: document.getElementById(`gym-my-workout-${day}`).checked,
+                    myTime: document.getElementById(`gym-my-time-${day}`).value
+                };
+            });
+            saveState();
+            const c = document.getElementById('content-area');
+            if(c) window.renderDiet(c);
+            alert("تم حفظ جدول الجيم والتنبيهات بنجاح! 🏋️‍♂️ الإشعارات ستصلك فقط في أيام تمرينك.");
+        };
+
+        // 3. ربط الإشعارات بالجدول الأسبوعي الجديد للجيم والصلاة
+        window.startNotificationEngine = function() {
+            if(notificationInterval) clearInterval(notificationInterval);
+            
+            if(!appState.settings.gymSchedule) appState.settings.gymSchedule = {};
+            if(!appState.settings.prayerTimes) appState.settings.prayerTimes = { 'الفجر': '04:30', 'الظهر': '12:00', 'العصر': '15:30', 'المغرب': '18:00', 'العشاء': '19:30' };
+            if(!appState.settings.notifications) appState.settings.notifications = { wardReminderHours: 2, sounds: {}, lastNotified: {} };
+
+            const daysArr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+            const checkAllAlerts = () => {
+                if(appState.settings.notifications.isPaused) return;
+
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const mins = String(now.getMinutes()).padStart(2, '0');
+                const time24 = `${hours}:${mins}`; 
+                const todayDate = now.toISOString().split('T')[0];
+                const todayName = daysArr[now.getDay()];
+                const nState = appState.settings.notifications;
+
+                ['husband', 'wife', 'aseel', 'aser'].forEach(k => {
+                    if(appState.schedules && appState.schedules[k]) {
+                        appState.schedules[k].forEach(sch => {
+                            if (sch.recurrence && sch.recurrence.includes('أسبوعياً') && !sch.recurrence.includes(todayName)) return;
+                            if (sch.status !== 'done' && sch.time === time24) {
+                                const notifKey = `sch_${k}_${sch.time}_${sch.text}_${todayDate}`;
+                                if (!nState.lastNotified[notifKey]) {
+                                    nState.lastNotified[notifKey] = true; saveState();
+                                    window.triggerPushAlert(`تذكير لـ ${appState.profiles[k].name} ⏰`, sch.text, 'schedules');
+                                }
+                            }
+                        });
+                    }
+                    const bt = appState.profiles[k]?.bedtime;
+                    if(bt && bt === time24) {
+                        const notifKey = `bedtime_${k}_${todayDate}`;
+                        if (!nState.lastNotified[notifKey]) {
+                            nState.lastNotified[notifKey] = true; saveState();
+                            window.triggerPushAlert(`حان وقت النوم 🌙`, `يا ${appState.profiles[k].name}، حان وقت النوم!`, 'schedules');
+                        }
+                    }
+                });
+
+                // تذكير الجيم الجديد
+                if(appState.settings.gymSchedule) {
+                    const todayGym = appState.settings.gymSchedule[todayName];
+                    if (todayGym && todayGym.isWorkoutDay && todayGym.myTime === time24) {
+                        const notifKey = `gym_${todayDate}`;
+                        if (!nState.lastNotified[notifKey]) {
+                            nState.lastNotified[notifKey] = true; saveState();
+                            const msg = todayGym.isOpen ? `حان موعد تمرينك الآن (${time24}).. شد حيلك الجيم بيقفل الساعة ${todayGym.close}.` : `حان موعد تمرينك، لكن انتبه الجيم مسجل بأنه مغلق اليوم!`;
+                            window.triggerPushAlert(`وقت الجيم يا وحش! 🏋️‍♂️`, msg, 'schedules');
+                        }
+                    }
+                }
+
+                const adhkarTimes = appState.settings.adhkarTimes || { morning: "07:00", evening: "17:00", sleep: "22:30" };
+                if(time24 === adhkarTimes.morning && !nState.lastNotified[`m_adhkar_${todayDate}`]) {
+                    nState.lastNotified[`m_adhkar_${todayDate}`] = true; saveState();
+                    window.triggerPushAlert(`أذكار الصباح ☀️`, `حان وقت أذكار الصباح.`, 'wird');
+                }
+                if(time24 === adhkarTimes.evening && !nState.lastNotified[`e_adhkar_${todayDate}`]) {
+                    nState.lastNotified[`e_adhkar_${todayDate}`] = true; saveState();
+                    window.triggerPushAlert(`أذكار المساء 🌇`, `حان وقت أذكار المساء.`, 'wird');
+                }
+
+                if(appState.settings.prayerTimes) {
+                    Object.keys(appState.settings.prayerTimes).forEach(pName => {
+                        if(appState.settings.prayerTimes[pName] === time24) {
+                            const notifKey = `prayer_${pName}_${todayDate}`;
+                            if(!nState.lastNotified[notifKey]) {
+                                nState.lastNotified[notifKey] = true; saveState();
+                                window.triggerPushAlert(`صلاة ${pName} 🕌`, `حان الآن موعد أذان ${pName}.`, 'prayer');
+                            }
+                        }
+                    });
+                }
+            };
+            
+            checkAllAlerts();
+            notificationInterval = setInterval(checkAllAlerts, 30000);
+        };
+        window.startNotificationEngine = startNotificationEngine;
+
 
 
 
