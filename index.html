@@ -6191,7 +6191,13 @@ window.closeQuranPlayer = function() {
             if(confirm("حذف القطعة نهائياً؟")) { appState.wardrobe = appState.wardrobe.filter(i => i.id !== id); saveState(); navigate('wardrobe'); }
         };
 
-        // 4. بناء واجهة الدولاب
+// ==========================================
+        // 👔 بناء واجهة الدولاب (مع التحديد المتعدد وأرشيف الشات)
+        // ==========================================
+        
+        // متغير عالمي لحفظ الـ IDs بتاعت القطع اللي بتحددها
+        window.selectedWardrobeItems = [];
+
         window.renderWardrobe = function(c) {
             if(!appState.wardrobe) appState.wardrobe = [];
             if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
@@ -6204,112 +6210,260 @@ window.closeQuranPlayer = function() {
                 { id: 'ساعة', name: 'ساعات', items: appState.wardrobe.filter(i => i.cat === 'ساعة') },
                 { id: 'عطر', name: 'عطور', items: appState.wardrobe.filter(i => i.cat === 'عطر') }
             ];
+            
             const dirtyItems = appState.wardrobe.filter(i => i.state === 'dirty');
             const wornItems = appState.wardrobe.filter(i => i.state === 'worn');
             const wSet = appState.wardrobeSettings;
+
+            // أرشيف الشات الخاص بالستايلست
+            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
+            if(!appState.savedDeepChats.wardrobe) appState.savedDeepChats.wardrobe = [];
+            const wChats = appState.savedDeepChats.wardrobe;
 
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20 font-sans" dir="rtl">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
                         <h2 class="text-3xl font-extrabold text-slate-800"><i class="fas fa-tshirt text-indigo-600 ml-2"></i> الستايلست الذكي (خزانتك)</h2>
-                        <button onclick="window.openSmartChat('assistant', 'شات الستايلست', 'أنت ستايلست شخصي. ساعدني في اختيار ملابسي وتنسيق الألوان وتطوير مظهري.')" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-comments"></i> شات الستايلست المخصص</button>
+                        <button onclick="window.openSmartChat('wardrobe', 'شات الستايلست', 'أنت ستايلست شخصي. ساعدني في اختيار ملابسي وتنسيق الألوان وتطوير مظهري بناءً على طولي (${wSet.height}) ووزني (${wSet.weight}).')" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-comments"></i> شات الستايلست المخصص</button>
                     </div>
 
-                    <!-- الملف الشخصي للستايل (المقاسات والصورة) -->
-                    <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col md:flex-row gap-6 items-center">
-                        <div class="relative group cursor-pointer w-24 h-24 md:w-32 md:h-32 shrink-0">
+                    <!-- شريط أدوات التحديد المتعدد العائم (يظهر عند تحديد صور) -->
+                    <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex gap-2 transition-all">
+                        <div class="text-white font-bold px-3 py-2 border-l border-slate-600 flex items-center">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
+                        <button onclick="window.bulkAction('worn')" class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-indigo-600 transition"><i class="fas fa-check-double ml-1"></i> لُبس اليوم</button>
+                        <button onclick="window.bulkAction('dirty')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition"><i class="fas fa-shopping-basket ml-1"></i> للسلة 🧺</button>
+                        <button onclick="window.bulkAction('delete')" class="bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-red-600 transition"><i class="fas fa-trash ml-1"></i> حذف</button>
+                        <button onclick="window.clearWardrobeSelection()" class="bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-slate-500 transition"><i class="fas fa-times"></i> إلغاء</button>
+                    </div>
+
+                    <!-- الملف الشخصي للستايل -->
+                    <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col md:flex-row gap-6 items-center relative overflow-hidden">
+                        <i class="fas fa-user-tie absolute -left-4 -bottom-4 text-8xl opacity-10"></i>
+                        <div class="relative group cursor-pointer w-24 h-24 md:w-32 md:h-32 shrink-0 z-10">
                             <input type="file" id="profile-photo-inp" accept="image/*" class="hidden" onchange="window.uploadUserStylePhoto(event)">
-                            <img src="${wSet.photo || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'}" class="w-full h-full object-cover rounded-full border-4 border-indigo-500 shadow-md">
+                            <img src="${wSet.photo || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'}" class="w-full h-full object-cover rounded-full border-4 border-indigo-500 shadow-md bg-white">
                             <div onclick="document.getElementById('profile-photo-inp').click()" class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><i class="fas fa-camera text-2xl"></i></div>
                         </div>
-                        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                            <div><label class="text-xs text-slate-400 block mb-1">الوزن (كجم)</label><input type="number" value="${wSet.weight}" onchange="appState.wardrobeSettings.weight=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
-                            <div><label class="text-xs text-slate-400 block mb-1">الطول (سم)</label><input type="number" value="${wSet.height}" onchange="appState.wardrobeSettings.height=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
-                            <div><label class="text-xs text-slate-400 block mb-1">الكتف (سم)</label><input type="number" value="${wSet.shoulder}" onchange="appState.wardrobeSettings.shoulder=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
-                            <div><label class="text-xs text-slate-400 block mb-1">الخصر (سم)</label><input type="number" value="${wSet.waist}" onchange="appState.wardrobeSettings.waist=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
+                        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full z-10">
+                            <div><label class="text-xs text-slate-400 block mb-1">الوزن (كجم)</label><input type="number" value="${wSet.weight}" onchange="appState.wardrobeSettings.weight=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold border border-slate-600 focus:border-indigo-400"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الطول (سم)</label><input type="number" value="${wSet.height}" onchange="appState.wardrobeSettings.height=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold border border-slate-600 focus:border-indigo-400"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الكتف (سم)</label><input type="number" value="${wSet.shoulder}" onchange="appState.wardrobeSettings.shoulder=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold border border-slate-600 focus:border-indigo-400"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الخصر (سم)</label><input type="number" value="${wSet.waist}" onchange="appState.wardrobeSettings.waist=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold border border-slate-600 focus:border-indigo-400"></div>
                         </div>
                     </div>
 
                     <!-- أزرار الذكاء الاصطناعي للتنسيق -->
-                    <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm">
-                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+                    <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm mt-6">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b border-indigo-200 pb-3">
                             <h3 class="font-bold text-indigo-800 text-lg"><i class="fas fa-magic ml-1"></i> العقل المدبر لتنسيق الأطقم</h3>
-                            <label class="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white px-3 py-1.5 rounded-lg shadow-sm border cursor-pointer select-none">
-                                <input type="checkbox" class="w-4 h-4 accent-indigo-600" ${wSet.allowRepeat ? 'checked' : ''} onchange="appState.wardrobeSettings.allowRepeat = this.checked; saveState();">
-                                السماح بتكرار لبس (الأمس)
+                            <label class="flex items-center gap-2 text-sm font-bold text-indigo-900 bg-white px-4 py-2 rounded-xl shadow-sm border border-indigo-200 cursor-pointer select-none hover:bg-indigo-50 transition">
+                                <input type="checkbox" class="w-5 h-5 accent-indigo-600" ${wSet.allowRepeat ? 'checked' : ''} onchange="appState.wardrobeSettings.allowRepeat = this.checked; saveState();">
+                                السماح بتكرار قطع لُبست مؤخراً
                             </label>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button onclick="window.coordinateOutfitAI()" class="bg-indigo-600 text-white p-4 rounded-xl shadow-md hover:bg-indigo-700 transition flex flex-col items-center gap-2"><i class="fas fa-tshirt text-2xl"></i><span class="font-bold">تنسيق طقم كامل لمناسبة</span></button>
-                            <button onclick="window.getWardrobeAdviceAI()" class="bg-teal-600 text-white p-4 rounded-xl shadow-md hover:bg-teal-700 transition flex flex-col items-center gap-2"><i class="fas fa-search-plus text-2xl"></i><span class="font-bold">فحص نواقص الدولاب</span></button>
+                            <button onclick="window.coordinateOutfitAI()" class="bg-gradient-to-r from-indigo-500 to-blue-600 text-white p-4 rounded-xl shadow-md hover:scale-[1.02] transition flex flex-col items-center gap-2"><i class="fas fa-tshirt text-3xl mb-1"></i><span class="font-bold text-lg">تنسيق طقم كامل لمناسبة</span></button>
+                            <button onclick="window.getWardrobeAdviceAI()" class="bg-gradient-to-r from-teal-500 to-emerald-600 text-white p-4 rounded-xl shadow-md hover:scale-[1.02] transition flex flex-col items-center gap-2"><i class="fas fa-search-plus text-3xl mb-1"></i><span class="font-bold text-lg">فحص نواقص الدولاب</span></button>
                         </div>
                     </div>
 
-                    <!-- الدولاب (الأقسام) -->
-                    <div class="space-y-6">
+                    <!-- إضافة قطعة يدوياً (للتصحيح السريع) -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap md:flex-nowrap gap-3 items-center mt-6">
+                        <input type="text" id="w-item-name" placeholder="وصف القطعة (مثال: قميص أسود سادة)" class="flex-1 border-2 border-slate-200 p-3 rounded-xl outline-none focus:border-indigo-400 bg-slate-50 font-bold">
+                        <select id="w-item-cat" class="border-2 border-slate-200 p-3 rounded-xl outline-none bg-slate-50 font-bold text-slate-700">
+                            <option value="علوي">ملابس علوية</option>
+                            <option value="سفلي">بناطيل/سفلي</option>
+                            <option value="حذاء">أحذية</option>
+                            <option value="عطر">عطور</option>
+                            <option value="ساعة">ساعات</option>
+                        </select>
+                        <input type="file" id="w-item-img" accept="image/*" class="hidden" onchange="window.saveWardrobeItem(event)">
+                        <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-slate-900 transition shrink-0 flex items-center gap-2"><i class="fas fa-camera text-lg"></i> تصوير وإضافة</button>
+                    </div>
+
+                    <!-- الدولاب (الأقسام المدمجة مع مربعات التحديد) -->
+                    <div class="space-y-6 mt-8">
                         ${cats.map(cat => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                 <div class="bg-slate-50 p-4 border-b flex justify-between items-center">
                                     <h3 class="font-bold text-slate-700"><i class="fas fa-tags ml-2"></i> ${cat.name} (${cat.items.length})</h3>
                                     <div class="flex gap-2">
                                         <input type="file" id="w-bulk-${cat.id}" accept="image/*" multiple class="hidden" onchange="window.handleBulkWardrobeUpload(event, '${cat.id}')">
-                                        <button onclick="document.getElementById('w-bulk-${cat.id}').click()" class="bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-slate-900 transition"><i class="fas fa-upload ml-1"></i> رفع متعدد</button>
+                                        <button onclick="document.getElementById('w-bulk-${cat.id}').click()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-900 transition flex items-center gap-2"><i class="fas fa-upload"></i> رفع متعدد ذكي</button>
                                     </div>
                                 </div>
-                                ${cat.items.length === 0 ? `<p class="text-center text-slate-400 py-6 font-bold text-sm">لا يوجد قطع نظيفة هنا.</p>` : `
+                                ${cat.items.length === 0 ? `<p class="text-center text-slate-400 py-6 font-bold text-sm">الرف فارغ حالياً.</p>` : `
                                     <div class="p-4 flex gap-4 overflow-x-auto custom-scrollbar">
-                                        ${cat.items.map(item => `
-                                            <div class="w-32 shrink-0 group flex flex-col relative border p-2 rounded-xl bg-white shadow-sm hover:border-indigo-300 transition">
-                                                <img src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border cursor-pointer" onclick="showModal('تفاصيل', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-3 font-bold text-center\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                                                <span class="text-[10px] text-slate-500 text-center mt-2 truncate font-bold" title="${item.desc}">${item.desc || item.name}</span>
-                                                <div class="absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
-                                                    <button onclick="window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-indigo-600">لُبس اليوم</button>
-                                                    <button onclick="window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-orange-600">للسلة 🧺</button>
-                                                    <button onclick="window.delWardrobeItem('${item.id}')" class="bg-red-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-red-600">حذف</button>
+                                        ${cat.items.map(item => {
+                                            const isSelected = window.selectedWardrobeItems.includes(item.id);
+                                            return `
+                                            <div class="w-32 shrink-0 group flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'} p-2 rounded-xl shadow-sm transition-all cursor-pointer" onclick="window.toggleItemSelection('${item.id}')">
+                                                
+                                                <!-- مربع التحديد (Checkbox) -->
+                                                <div class="absolute top-3 right-3 z-10 bg-white/80 rounded-md shadow-sm border border-slate-200 w-6 h-6 flex items-center justify-center">
+                                                    <input type="checkbox" class="w-4 h-4 accent-indigo-600 pointer-events-none" ${isSelected ? 'checked' : ''}>
                                                 </div>
+
+                                                <img src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border border-slate-200 ${isSelected ? 'opacity-80' : ''}">
+                                                <span class="text-[10px] text-slate-600 text-center mt-2 truncate font-bold" title="${item.desc}">${item.desc || item.name}</span>
+                                                
+                                                <!-- القائمة السريعة للقطعة الواحدة (تظهر بالهوفر فقط إذا لم يكن هناك تحديد متعدد) -->
+                                                ${window.selectedWardrobeItems.length === 0 ? `
+                                                <div class="absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-2 backdrop-blur-sm z-20">
+                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-indigo-600 shadow"><i class="fas fa-check-double"></i> لُبس اليوم</button>
+                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-orange-600 shadow"><i class="fas fa-shopping-basket"></i> للسلة</button>
+                                                    <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-red-600 shadow"><i class="fas fa-trash"></i> حذف</button>
+                                                    <button onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])" class="text-white mt-1 text-xs hover:text-teal-300"><i class="fas fa-eye"></i> تكبير</button>
+                                                </div>
+                                                ` : ''}
                                             </div>
-                                        `).join('')}
+                                            `;
+                                        }).join('')}
                                     </div>
                                 `}
                             </div>
                         `).join('')}
                     </div>
 
-                    <!-- سلة الغسيل وسجل اللبس -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                        <!-- سلة الغسيل -->
+                    <!-- سلة الغسيل وسجل الأطقم -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                        <!-- سلة الغسيل المتسخ -->
                         <div class="bg-orange-50 p-5 rounded-2xl border border-orange-200 shadow-sm">
-                            <h3 class="font-bold text-orange-800 text-lg mb-4 border-b border-orange-200 pb-2"><i class="fas fa-shopping-basket ml-1"></i> سلة الغسيل المتسخ</h3>
-                            <div class="flex flex-wrap gap-3">
-                                ${dirtyItems.length === 0 ? '<span class="text-sm text-slate-500">السلة فارغة</span>' : dirtyItems.map(item => `
-                                    <div class="relative w-16 h-16 group">
-                                        <img src="${item.img}" class="w-full h-full object-cover rounded-lg border-2 border-orange-300 opacity-70">
-                                        <button onclick="window.changeItemState('${item.id}', 'clean')" class="absolute inset-0 bg-green-500/80 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center text-center">تم الغسيل</button>
+                            <h3 class="font-bold text-orange-800 text-lg mb-4 border-b border-orange-200 pb-2 flex justify-between items-center">
+                                <span><i class="fas fa-shopping-basket ml-1"></i> سلة الغسيل (${dirtyItems.length})</span>
+                                ${dirtyItems.length > 0 ? `<button onclick="window.washAllDirty()" class="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg shadow font-bold hover:bg-green-600 transition"><i class="fas fa-tint"></i> غسيل الكل</button>` : ''}
+                            </h3>
+                            <div class="flex flex-wrap gap-3 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                ${dirtyItems.length === 0 ? '<span class="text-sm text-slate-500 font-bold py-4">السلة فارغة، ملابسك نظيفة! ✨</span>' : dirtyItems.map(item => `
+                                    <div class="relative w-16 h-16 group cursor-pointer border-2 border-orange-300 rounded-lg shadow-sm" onclick="window.changeItemState('${item.id}', 'clean')">
+                                        <img src="${item.img}" class="w-full h-full object-cover rounded-md opacity-60">
+                                        <div class="absolute inset-0 bg-green-500/80 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition rounded-md flex flex-col items-center justify-center text-center"><i class="fas fa-check-circle mb-1 text-sm"></i>نظيفة</div>
                                     </div>
                                 `).join('')}
                             </div>
                         </div>
                         
-                        <!-- سجل اللبس -->
+                        <!-- سجل الأطقم (المُستخدم مؤخراً) -->
                         <div class="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-sm">
-                            <h3 class="font-bold text-slate-800 text-lg mb-4 border-b border-slate-300 pb-2"><i class="fas fa-history ml-1"></i> سجل الأطقم (المُستخدم مؤخراً)</h3>
-                            <div class="flex flex-wrap gap-3 max-h-40 overflow-y-auto custom-scrollbar">
-                                ${wornItems.length === 0 ? '<span class="text-sm text-slate-500">لا يوجد سجل حالياً</span>' : wornItems.sort((a,b)=> new Date(b.lastWorn) - new Date(a.lastWorn)).map(item => `
-                                    <div class="bg-white p-2 rounded-lg border shadow-sm flex items-center gap-2 w-full md:w-auto">
-                                        <img src="${item.img}" class="w-10 h-10 object-cover rounded">
-                                        <div class="flex flex-col">
-                                            <span class="text-xs font-bold text-slate-700">${item.lastWorn}</span>
-                                            <button onclick="window.changeItemState('${item.id}', 'clean')" class="text-[10px] text-blue-600 font-bold text-right hover:underline">إرجاع للدولاب</button>
+                            <h3 class="font-bold text-slate-800 text-lg mb-4 border-b border-slate-300 pb-2"><i class="fas fa-history ml-1"></i> سجل القطع الملبوسة مؤخراً</h3>
+                            <div class="flex flex-wrap gap-3 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                ${wornItems.length === 0 ? '<span class="text-sm text-slate-500 font-bold py-4">لا يوجد قطع ملبوسة حالياً.</span>' : wornItems.sort((a,b)=> new Date(b.lastWorn) - new Date(a.lastWorn)).map(item => `
+                                    <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3 w-full md:w-auto">
+                                        <img src="${item.img}" class="w-12 h-12 object-cover rounded-lg border border-slate-100">
+                                        <div class="flex flex-col flex-1 pr-1">
+                                            <span class="text-[10px] text-slate-400 font-bold mb-1">${item.lastWorn}</span>
+                                            <div class="flex gap-2">
+                                                <button onclick="window.changeItemState('${item.id}', 'dirty')" class="text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold hover:bg-orange-200 transition">للسلة 🧺</button>
+                                                <button onclick="window.changeItemState('${item.id}', 'clean')" class="text-[10px] bg-slate-200 text-slate-700 px-2 py-1 rounded font-bold hover:bg-slate-300 transition">نظيفة (إرجاع)</button>
+                                            </div>
                                         </div>
                                     </div>
                                 `).join('')}
                             </div>
                         </div>
                     </div>
+
+                    <!-- أرشيف جلسات الستايلست (شات) -->
+                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-200 shadow-inner mt-8">
+                        <h3 class="font-bold text-xl mb-4 border-b border-indigo-300 pb-2 text-indigo-800"><i class="fas fa-comments ml-2"></i> أرشيف نصائح الستايلست الذكي</h3>
+                        <div class="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                            ${wChats.length === 0 ? '<p class="text-center text-slate-400 py-6 font-bold">لا يوجد جلسات محفوظة. ابدأ شات الستايلست بالأعلى!</p>' : wChats.map(c => `
+                                <div class="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm relative mb-3">
+                                    <div class="flex justify-between items-center mb-2 border-b pb-2">
+                                        <h4 class="font-bold text-indigo-700 text-sm truncate max-w-[60%]">${c.title}</h4>
+                                        <div class="flex gap-2">
+                                            <button onclick="window.openSmartChat('wardrobe', '${c.title ? c.title.replace(/'/g,"\\'") : 'محادثة ستايلست'}', null, '${c.id}')" class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fas fa-eye"></i> استكمال</button>
+                                            <button onclick="window.delSmartChat('wardrobe', '${c.id}')" class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-bold transition"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-slate-500 font-bold"><i class="far fa-calendar-alt ml-1"></i> التاريخ: ${c.date} | ${c.messages ? c.messages.length : 0} رسالة</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
                 </div>
             `;
+            setTimeout(window.updateBulkBarUI, 100);
         };
 
+        // ==========================================
+        // 🛠️ دوال التحكم في التحديد المتعدد
+        // ==========================================
+        window.toggleItemSelection = function(id) {
+            const index = window.selectedWardrobeItems.indexOf(id);
+            if(index > -1) {
+                window.selectedWardrobeItems.splice(index, 1); // إلغاء تحديد
+            } else {
+                window.selectedWardrobeItems.push(id); // تحديد
+            }
+            window.renderWardrobe(document.getElementById('content-area'));
+        };
+
+        window.clearWardrobeSelection = function() {
+            window.selectedWardrobeItems = [];
+            window.renderWardrobe(document.getElementById('content-area'));
+        };
+
+        window.updateBulkBarUI = function() {
+            const bar = document.getElementById('bulk-action-bar');
+            const countSpan = document.getElementById('bulk-count');
+            if(bar && countSpan) {
+                if(window.selectedWardrobeItems.length > 0) {
+                    countSpan.innerText = window.selectedWardrobeItems.length;
+                    bar.classList.remove('hidden');
+                    bar.classList.add('flex');
+                } else {
+                    bar.classList.add('hidden');
+                    bar.classList.remove('flex');
+                }
+            }
+        };
+
+        window.bulkAction = function(action) {
+            const count = window.selectedWardrobeItems.length;
+            if(count === 0) return;
+
+            let confirmMsg = "";
+            if(action === 'worn') confirmMsg = `هل أنت متأكد من تسجيل (${count}) قطع كملبوسة اليوم؟`;
+            else if(action === 'dirty') confirmMsg = `هل أنت متأكد من نقل (${count}) قطع إلى سلة الغسيل؟`;
+            else if(action === 'delete') confirmMsg = `⚠️ تحذير: هل أنت متأكد من حذف (${count}) قطع نهائياً من الدولاب؟`;
+
+            showModal("تأكيد الإجراء الجماعي", `<p class="text-center font-bold text-slate-700 py-4">${confirmMsg}</p>`, [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800 font-bold"},
+                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: () => {
+                    if(action === 'delete') {
+                        appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
+                    } else {
+                        const today = new Date().toLocaleDateString('ar-EG');
+                        window.selectedWardrobeItems.forEach(id => {
+                            const item = appState.wardrobe.find(i => i.id === id);
+                            if(item) {
+                                item.state = action;
+                                if(action === 'worn') item.lastWorn = today;
+                            }
+                        });
+                    }
+                    saveState();
+                    window.clearWardrobeSelection(); // بيمسح التحديد ويعمل رندر للصفحة
+                }}
+            ]);
+        };
+
+        // زرار سحري لغسل كل السلة مرة واحدة
+        window.washAllDirty = function() {
+            showModal("غسيل كل السلة 🧺", "<p class='text-center font-bold text-slate-700 py-4'>هل قمت بغسل وتجفيف كل الملابس في السلة وتريد إرجاعها نظيفة للدولاب؟</p>", [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
+                {text: "نعم، تم الغسيل 🧼", class: "bg-green-600 text-white", onClick: () => {
+                    appState.wardrobe.forEach(item => {
+                        if(item.state === 'dirty') item.state = 'clean';
+                    });
+                    saveState();
+                    window.renderWardrobe(document.getElementById('content-area'));
+                }}
+            ]);
+        };
+
+        
         // دالة رفع الصورة الشخصية
         window.uploadUserStylePhoto = async function(e) {
             const f = e.target.files[0]; if(!f) return;
