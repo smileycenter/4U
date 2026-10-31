@@ -477,7 +477,7 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
 
         // Core AI Logic
   
-// Core AI Logic - مطورة لمعرفة سبب الخطأ الحقيقي من جوجل
+// Core AI Logic - مطورة لتدعم أكثر من صورة معاً
         async function askAI(prompt, filesData = null, responseType = "text", loaderMsg = "جاري المعالجة...", mimeType = "image/jpeg") {
             const key = appState.apiKeys.gemini || "";
             if(!key) { alert("يرجى وضع مفتاح Gemini API في الإعدادات"); return null; }
@@ -485,6 +485,7 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
             try {
                 let parts = [{ text: prompt }];
                 
+                // دعم الصور المتعددة أو الصورة الواحدة أو الملفات
                 if (filesData && Array.isArray(filesData)) {
                     filesData.forEach(file => {
                         parts.push({ inlineData: { mimeType: file.mimeType || "image/jpeg", data: file.data } });
@@ -496,35 +497,29 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
                 const payload = { contents: [{ parts: parts }], generationConfig: {} };
                 if (responseType === "json") payload.generationConfig.responseMimeType = "application/json";
 
-                // استخدام الموديل الرسمي المدعوم للرؤية والصور
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`;
                 const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                
-                // فحص الأخطاء وجلب رسالة جوجل الحقيقية
-                if(!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.error?.message || "خطأ غير معروف برقم: " + res.status);
-                }
-                
+                if(!res.ok) throw new Error("API Error");
                 const data = await res.json();
                 hideLoading();
                 const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                 return responseType === "json" ? JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim()) : text;
             } catch (error) {
                 hideLoading(); 
-                // 💡 هنا التغيير: عرض رسالة الخطأ الأصلية من جوجل
-                alert("خطأ من سيرفر جوجل: " + error.message); 
-                console.error("AI API Error:", error);
+                alert("حدث خطأ في الاتصال بالذكاء الاصطناعي. تأكد من حجم الملفات أو الاتصال."); 
+                console.error(error);
                 return null;
             }
         }
+
+
 
         async function textToSpeech(text, voiceName = "Zephyr") {
             try {
                 const key = appState.apiKeys.gemini;
                 if(!key) return null;
-                const payload = { contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }, model: "models/gemini-1.5-flash" };
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const payload = { contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }, model: "gemini-3.8-flash" };
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const data = await res.json();
                 const b64 = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
                 const mime = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType;
@@ -544,7 +539,6 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
                 }
             } catch (e) { return null; }
         }
-
 
         
         function fileToBase64(file) {
