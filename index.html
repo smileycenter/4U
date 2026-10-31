@@ -6111,17 +6111,16 @@ window.closeQuranPlayer = function() {
             }
         };
 
-// ==========================================
-        // 👔 منسق الملابس الذكي 2.0 (مربوط بسحابة Firebase Storage + ذكاء اصطناعي متقدم)
-        // ==========================================
-
-        // 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage
-        window.uploadWardrobeToStorage = async function(base64Data, mimeType, fileName) {
+// 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage
+        window.uploadWardrobeToStorage = async function(base64Data, mimeType) {
             const bucketUrl = appState.apiKeys.fireStorageBucket;
-            if(!bucketUrl) { alert("⚠️ رابط سحابة Storage مفقود. سيتم الحفظ محلياً مؤقتاً."); return `data:${mimeType};base64,${base64Data}`; }
+            if(!bucketUrl) { 
+                console.warn("⚠️ رابط سحابة Storage مفقود. سيتم الحفظ محلياً مؤقتاً."); 
+                return `data:${mimeType};base64,${base64Data}`; 
+            }
             
             try {
-                // تحويل Base64 لـ Blob لرفعه
+                // تحويل Base64 لـ Blob لرفعه للسحابة
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
@@ -6133,89 +6132,197 @@ window.closeQuranPlayer = function() {
                 
                 const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': mimeType } });
                 const data = await res.json();
-                return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+                
+                if(data.name) {
+                    return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+                } else {
+                    throw new Error("لم يرجع رابط صحيح من فايربيز");
+                }
             } catch(e) {
-                console.error(e); return `data:${mimeType};base64,${base64Data}`; // لو فشل يرجع يحفظها محلي
+                console.error("فشل الرفع للسحابة، التخزين المحلي كبديل:", e); 
+                return `data:${mimeType};base64,${base64Data}`; 
             }
         };
 
-        // 2. الرفع المتعدد والتحليل الآلي (ملابس - عطور - ساعات)
+        // 2. الرفع المتعدد والتحليل الآلي (مع الضغط المزدوج لحل مشكلة الاتصال)
         window.handleBulkWardrobeUpload = async function(event, category) {
             const files = event.target.files; if(!files.length) return;
-            showLoading(`جاري فحص ورفع ${files.length} قطعة بالذكاء الاصطناعي للسحابة ☁️...`);
+            showLoading(`جاري ضغط ورفع ${files.length} قطعة للسحابة ☁️...`);
             
             for(let i=0; i<files.length; i++) {
                 try {
-                    const b64 = await compressImageFile(files[i], 800, 0.7);
+                    // 💡 الضغط القاسي (للذكاء الاصطناعي فقط) عشان ميستهلكش النت ويفصل
+                    const aiB64 = await compressImageFile(files[i], 400, 0.5);
+                    // 💡 الضغط المتوسط (لسحابة Firebase) عشان الصورة تفضل جودتها كويسة في الدولاب
+                    const storageB64 = await compressImageFile(files[i], 800, 0.7);
+                    
                     let aiDesc = "";
                     let itemName = "قطعة جديدة";
 
-                    if (category === 'عطر') {
-                        const res = await askAI("أنت خبير عطور. ما هو هذا العطر في الصورة؟ أذكر اسمه ومكوناته (النوتات العطرية الأساسية) باختصار شديد جداً. JSON: {'name': 'اسم العطر', 'notes': 'خشب صندل، حمضيات...'}", {mimeType: "image/jpeg", data: b64}, "json", "أشم العطر...");
-                        if(res) { itemName = res.name; aiDesc = res.notes; }
-                    } else if (category === 'ساعة') {
-                        const res = await askAI("صف هذه الساعة باختصار (مثال: كلاسيك جلد بني، أو رياضية سوداء). JSON: {'desc': 'الوصف'}", {mimeType: "image/jpeg", data: b64}, "json");
-                        if(res) { itemName = "ساعة"; aiDesc = res.desc; }
-                    } else {
-                        const res = await askAI(`صف قطعة الملابس هذه باختصار شديد (اللون والنوع، مثال: قميص أزرق كاروهات). JSON: {'desc': 'الوصف'}`, {mimeType: "image/jpeg", data: b64}, "json");
-                        if(res) { itemName = res.desc; aiDesc = res.desc; }
+                    // 🛡️ شبكة الأمان: محاولة استخدام الذكاء الاصطناعي
+                    try {
+                        if (category === 'عطر') {
+                            const res = await askAI("أنت خبير عطور. ما هو هذا العطر في الصورة؟ أذكر اسمه ومكوناته باختصار. JSON: {'name': 'اسم العطر', 'notes': 'مكونات...'}", {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل العطر...");
+                            if(res) { itemName = res.name; aiDesc = res.notes; }
+                        } else if (category === 'ساعة' || category === 'إكسسوار') {
+                            const res = await askAI("صف هذه القطعة باختصار. JSON: {'desc': 'الوصف'}", {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل القطعة...");
+                            if(res) { itemName = category; aiDesc = res.desc; }
+                        } else {
+                            const res = await askAI(`صف هذه القطعة باختصار شديد (اللون والنوع). JSON: {'desc': 'الوصف'}`, {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل الملابس...");
+                            if(res) { itemName = res.desc; aiDesc = res.desc; }
+                        }
+                    } catch (aiError) {
+                        console.warn("تم تخطي الذكاء الاصطناعي مؤقتاً بسبب الاتصال.");
+                        itemName = "قطعة " + category;
+                        aiDesc = "تمت الإضافة بدون وصف ذكي";
                     }
 
-                    // رفع الصورة للسحابة
-                    const fireUrl = await uploadWardrobeToStorage(b64, "image/jpeg");
+                    // الرفع على سحابة فايربيز باستخدام الصورة ذات الجودة المتوسطة
+                    const fireUrl = await uploadWardrobeToStorage(storageB64, "image/jpeg");
                     
                     appState.wardrobe.unshift({ 
-                        id: generateId(), 
-                        name: itemName, 
-                        desc: aiDesc,
-                        cat: category, 
-                        img: fireUrl, // الرابط السحابي
-                        state: 'clean', // clean, dirty, worn
-                        lastWorn: '' 
+                        id: generateId(), name: itemName, desc: aiDesc, cat: category, 
+                        img: fireUrl, state: 'clean', lastWorn: '' 
                     });
-                } catch(e) { console.error("Error processing item:", e); }
+                } catch(e) { console.error("خطأ في معالجة ورفع القطعة:", e); }
             }
             saveState(); navigate('wardrobe'); hideLoading();
         };
 
-        // 3. التحكم في حالة القطعة (غسيل - لبس)
-        window.changeItemState = function(id, newState) {
-            const item = appState.wardrobe.find(i => i.id === id);
-            if(item) { 
-                item.state = newState; 
-                if(newState === 'worn') item.lastWorn = new Date().toLocaleDateString('ar-EG');
-                saveState(); navigate('wardrobe'); 
+        // 3. الإضافة اليدوية (تم ترقيتها للرفع على السحابة أيضاً)
+        window.saveWardrobeItem = async function(event) {
+            const file = event.target.files[0];
+            const name = document.getElementById('w-item-name').value.trim();
+            const cat = document.getElementById('w-item-cat').value;
+            
+            if(!file || !name) return alert("يرجى كتابة وصف القطعة واختيار صورة!");
+            
+            showLoading("جاري ضغط القطعة ورفعها للسحابة ☁️...");
+            try {
+                const b64 = await compressImageFile(file, 800, 0.7);
+                const fireUrl = await uploadWardrobeToStorage(b64, "image/jpeg");
+                
+                appState.wardrobe.unshift({ 
+                    id: generateId(), name, desc: name, cat, 
+                    img: fireUrl, state: 'clean', lastWorn: '' 
+                });
+                
+                saveState();
+                navigate('wardrobe'); 
+            } catch(e) { 
+                alert("حدث خطأ أثناء حفظ ورفع الصورة."); 
+            }
+            hideLoading();
+        };
+
+
+
+        
+
+        // 2. دوال التحديد (بدون رعشة أو إعادة تحميل للصفحة)
+        window.toggleItemSelection = function(id) {
+            const index = window.selectedWardrobeItems.indexOf(id);
+            const card = document.getElementById(`w-card-${id}`);
+            const checkbox = document.getElementById(`w-check-${id}`);
+            const img = document.getElementById(`w-img-${id}`);
+
+            if(index > -1) {
+                // إلغاء التحديد
+                window.selectedWardrobeItems.splice(index, 1);
+                if(card) { card.classList.remove('border-indigo-500', 'bg-indigo-50'); card.classList.add('border-slate-100', 'bg-white'); }
+                if(checkbox) checkbox.checked = false;
+                if(img) img.classList.remove('opacity-80');
+            } else {
+                // تحديد
+                window.selectedWardrobeItems.push(id);
+                if(card) { card.classList.add('border-indigo-500', 'bg-indigo-50'); card.classList.remove('border-slate-100', 'bg-white'); }
+                if(checkbox) checkbox.checked = true;
+                if(img) img.classList.add('opacity-80');
+            }
+            
+            // إخفاء القوائم السريعة (الهوفر) وقت التحديد المتعدد عشان متضايقكش
+            document.querySelectorAll('.w-quick-menu').forEach(menu => {
+                menu.style.display = window.selectedWardrobeItems.length > 0 ? 'none' : 'flex';
+            });
+
+            window.updateBulkBarUI();
+        };
+
+        window.clearWardrobeSelection = function() {
+            window.selectedWardrobeItems.forEach(id => {
+                const card = document.getElementById(`w-card-${id}`);
+                const checkbox = document.getElementById(`w-check-${id}`);
+                const img = document.getElementById(`w-img-${id}`);
+                if(card) { card.classList.remove('border-indigo-500', 'bg-indigo-50'); card.classList.add('border-slate-100', 'bg-white'); }
+                if(checkbox) checkbox.checked = false;
+                if(img) img.classList.remove('opacity-80');
+            });
+            window.selectedWardrobeItems = [];
+            document.querySelectorAll('.w-quick-menu').forEach(menu => menu.style.display = 'flex');
+            window.updateBulkBarUI();
+        };
+
+        window.updateBulkBarUI = function() {
+            const bar = document.getElementById('bulk-action-bar');
+            const countSpan = document.getElementById('bulk-count');
+            if(bar && countSpan) {
+                if(window.selectedWardrobeItems.length > 0) {
+                    countSpan.innerText = window.selectedWardrobeItems.length;
+                    bar.classList.remove('hidden'); bar.classList.add('flex');
+                } else {
+                    bar.classList.add('hidden'); bar.classList.remove('flex');
+                }
             }
         };
-        window.delWardrobeItem = function(id) {
-            if(confirm("حذف القطعة نهائياً؟")) { appState.wardrobe = appState.wardrobe.filter(i => i.id !== id); saveState(); navigate('wardrobe'); }
+
+        // زرار الأكشن الجماعي (هو اللي بيعمل ريفريش في النهاية بس لنقل القطع)
+        window.bulkAction = function(action) {
+            const count = window.selectedWardrobeItems.length;
+            if(count === 0) return;
+
+            let msg = action === 'worn' ? `تسجيل (${count}) قطع كملبوسة اليوم؟` : action === 'dirty' ? `نقل (${count}) قطع لسلة الغسيل؟` : `حذف (${count}) قطع نهائياً؟`;
+
+            showModal("تأكيد الإجراء", `<p class="text-center font-bold py-4">${msg}</p>`, [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800", onClick: () => window.clearWardrobeSelection()},
+                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: () => {
+                    if(action === 'delete') {
+                        appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
+                    } else {
+                        const today = new Date().toLocaleDateString('ar-EG');
+                        window.selectedWardrobeItems.forEach(id => {
+                            const item = appState.wardrobe.find(i => i.id === id);
+                            if(item) { item.state = action; if(action === 'worn') item.lastWorn = today; }
+                        });
+                    }
+                    window.selectedWardrobeItems = []; // تصفير الذاكرة قبل الحفظ
+                    saveState();
+                    navigate('wardrobe'); // ريفريش لنقل القطع لأماكنها الجديدة
+                }}
+            ]);
         };
 
 // ==========================================
-        // 👔 بناء واجهة الدولاب (مع التحديد المتعدد وأرشيف الشات)
+        // 3. بناء واجهة الدولاب المحدثة (مع التكبير المباشر بالضغط على الصورة)
         // ==========================================
-        
-        // متغير عالمي لحفظ الـ IDs بتاعت القطع اللي بتحددها
-        window.selectedWardrobeItems = [];
-
         window.renderWardrobe = function(c) {
             if(!appState.wardrobe) appState.wardrobe = [];
             if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
             saveState();
 
             const cats = [
+                { id: 'طبي', name: 'ملابس طبية (سكراب/بالطو)', items: appState.wardrobe.filter(i => i.cat === 'طبي' && i.state !== 'dirty') },
                 { id: 'علوي', name: 'ملابس علوية', items: appState.wardrobe.filter(i => i.cat === 'علوي' && i.state !== 'dirty') },
                 { id: 'سفلي', name: 'بناطيل وشورتات', items: appState.wardrobe.filter(i => i.cat === 'سفلي' && i.state !== 'dirty') },
                 { id: 'حذاء', name: 'أحذية', items: appState.wardrobe.filter(i => i.cat === 'حذاء' && i.state !== 'dirty') },
+                { id: 'عطر', name: 'عطور', items: appState.wardrobe.filter(i => i.cat === 'عطر') },
                 { id: 'ساعة', name: 'ساعات', items: appState.wardrobe.filter(i => i.cat === 'ساعة') },
-                { id: 'عطر', name: 'عطور', items: appState.wardrobe.filter(i => i.cat === 'عطر') }
+                { id: 'إكسسوار', name: 'إكسسوارات أخرى', items: appState.wardrobe.filter(i => i.cat === 'إكسسوار') }
             ];
             
             const dirtyItems = appState.wardrobe.filter(i => i.state === 'dirty');
             const wornItems = appState.wardrobe.filter(i => i.state === 'worn');
             const wSet = appState.wardrobeSettings;
 
-            // أرشيف الشات الخاص بالستايلست
             if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
             if(!appState.savedDeepChats.wardrobe) appState.savedDeepChats.wardrobe = [];
             const wChats = appState.savedDeepChats.wardrobe;
@@ -6227,8 +6334,8 @@ window.closeQuranPlayer = function() {
                         <button onclick="window.openSmartChat('wardrobe', 'شات الستايلست', 'أنت ستايلست شخصي. ساعدني في اختيار ملابسي وتنسيق الألوان وتطوير مظهري بناءً على طولي (${wSet.height}) ووزني (${wSet.weight}).')" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-comments"></i> شات الستايلست المخصص</button>
                     </div>
 
-                    <!-- شريط أدوات التحديد المتعدد العائم (يظهر عند تحديد صور) -->
-                    <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex gap-2 transition-all">
+                    <!-- شريط أدوات التحديد المتعدد العائم -->
+                    <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 gap-2 transition-all">
                         <div class="text-white font-bold px-3 py-2 border-l border-slate-600 flex items-center">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
                         <button onclick="window.bulkAction('worn')" class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-indigo-600 transition"><i class="fas fa-check-double ml-1"></i> لُبس اليوم</button>
                         <button onclick="window.bulkAction('dirty')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition"><i class="fas fa-shopping-basket ml-1"></i> للسلة 🧺</button>
@@ -6267,21 +6374,23 @@ window.closeQuranPlayer = function() {
                         </div>
                     </div>
 
-                    <!-- إضافة قطعة يدوياً (للتصحيح السريع) -->
+                    <!-- إضافة قطعة يدوياً -->
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap md:flex-nowrap gap-3 items-center mt-6">
                         <input type="text" id="w-item-name" placeholder="وصف القطعة (مثال: قميص أسود سادة)" class="flex-1 border-2 border-slate-200 p-3 rounded-xl outline-none focus:border-indigo-400 bg-slate-50 font-bold">
                         <select id="w-item-cat" class="border-2 border-slate-200 p-3 rounded-xl outline-none bg-slate-50 font-bold text-slate-700">
+                            <option value="طبي">ملابس طبية (سكراب/بالطو)</option>
                             <option value="علوي">ملابس علوية</option>
                             <option value="سفلي">بناطيل/سفلي</option>
                             <option value="حذاء">أحذية</option>
                             <option value="عطر">عطور</option>
                             <option value="ساعة">ساعات</option>
+                            <option value="إكسسوار">إكسسوارات أخرى</option>
                         </select>
                         <input type="file" id="w-item-img" accept="image/*" class="hidden" onchange="window.saveWardrobeItem(event)">
                         <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-slate-900 transition shrink-0 flex items-center gap-2"><i class="fas fa-camera text-lg"></i> تصوير وإضافة</button>
                     </div>
 
-                    <!-- الدولاب (الأقسام المدمجة مع مربعات التحديد) -->
+                    <!-- الدولاب (الأقسام المدمجة مع مربعات التحديد والتكبير) -->
                     <div class="space-y-6 mt-8">
                         ${cats.map(cat => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -6297,25 +6406,29 @@ window.closeQuranPlayer = function() {
                                         ${cat.items.map(item => {
                                             const isSelected = window.selectedWardrobeItems.includes(item.id);
                                             return `
-                                            <div class="w-32 shrink-0 group flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'} p-2 rounded-xl shadow-sm transition-all cursor-pointer" onclick="window.toggleItemSelection('${item.id}')">
+                                            <div id="w-card-${item.id}" class="w-32 shrink-0 group flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'} p-2 rounded-xl shadow-sm transition-all cursor-pointer" onclick="window.toggleItemSelection('${item.id}')">
                                                 
-                                                <!-- مربع التحديد (Checkbox) -->
-                                                <div class="absolute top-3 right-3 z-10 bg-white/80 rounded-md shadow-sm border border-slate-200 w-6 h-6 flex items-center justify-center">
-                                                    <input type="checkbox" class="w-4 h-4 accent-indigo-600 pointer-events-none" ${isSelected ? 'checked' : ''}>
+                                                <!-- مربع التحديد (مساحة أكبر لسهولة الضغط على الموبايل) -->
+                                                <div class="absolute top-2 right-2 z-10 bg-white/90 rounded-md shadow-sm border border-slate-200 w-8 h-8 flex items-center justify-center hover:bg-slate-100 transition" onclick="event.stopPropagation(); window.toggleItemSelection('${item.id}')">
+                                                    <input type="checkbox" id="w-check-${item.id}" class="w-5 h-5 accent-indigo-600 pointer-events-none" ${isSelected ? 'checked' : ''}>
                                                 </div>
 
-                                                <img src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border border-slate-200 ${isSelected ? 'opacity-80' : ''}">
-                                                <span class="text-[10px] text-slate-600 text-center mt-2 truncate font-bold" title="${item.desc}">${item.desc || item.name}</span>
+                                                <!-- زر التكبير العائم على الصورة (عدسة مكبرة) -->
+                                                <div class="absolute top-2 left-2 z-10 bg-black/50 text-white rounded-md w-7 h-7 flex items-center justify-center hover:bg-black/80 transition" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                    <i class="fas fa-search-plus text-xs"></i>
+                                                </div>
+
+                                                <!-- الصورة نفسها (الضغط عليها يكبرها فوراً ولا يحددها) -->
+                                                <img id="w-img-${item.id}" src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border border-slate-200 ${isSelected ? 'opacity-80' : ''}" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                
+                                                <span class="text-[10px] text-slate-600 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
                                                 
                                                 <!-- القائمة السريعة للقطعة الواحدة (تظهر بالهوفر فقط إذا لم يكن هناك تحديد متعدد) -->
-                                                ${window.selectedWardrobeItems.length === 0 ? `
-                                                <div class="absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-2 backdrop-blur-sm z-20">
+                                                <div id="w-quick-${item.id}" class="w-quick-menu absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex-col items-center justify-center gap-2 backdrop-blur-sm z-20" style="${window.selectedWardrobeItems.length > 0 ? 'display: none;' : 'display: flex;'}">
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-indigo-600 shadow"><i class="fas fa-check-double"></i> لُبس اليوم</button>
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-orange-600 shadow"><i class="fas fa-shopping-basket"></i> للسلة</button>
                                                     <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-red-600 shadow"><i class="fas fa-trash"></i> حذف</button>
-                                                    <button onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])" class="text-white mt-1 text-xs hover:text-teal-300"><i class="fas fa-eye"></i> تكبير</button>
                                                 </div>
-                                                ` : ''}
                                             </div>
                                             `;
                                         }).join('')}
@@ -6386,81 +6499,184 @@ window.closeQuranPlayer = function() {
             setTimeout(window.updateBulkBarUI, 100);
         };
 
-        // ==========================================
-        // 🛠️ دوال التحكم في التحديد المتعدد
-        // ==========================================
-        window.toggleItemSelection = function(id) {
-            const index = window.selectedWardrobeItems.indexOf(id);
-            if(index > -1) {
-                window.selectedWardrobeItems.splice(index, 1); // إلغاء تحديد
+        // 2. رفع الصورة الشخصية للستايلست
+        window.uploadUserStylePhoto = async function(e) {
+            const f = e.target.files[0]; if(!f) return;
+            showLoading("جاري الحفظ على السحابة...");
+            try {
+                const b64 = await compressImageFile(f, 600, 0.7);
+                const url = await uploadWardrobeToStorage(b64, "image/jpeg");
+                appState.wardrobeSettings.photo = url;
+                saveState(); navigate('wardrobe');
+            } catch(error) {
+                alert('فشل رفع الصورة الشخصية.');
+            }
+            hideLoading();
+        };
+
+        // 3. التنسيق الذكي للأطقم
+        window.lastCoordinatedOutfit = null; // ذاكرة مؤقتة للطقم
+        window.coordinateOutfitAI = async function() {
+            const cleanItems = appState.wardrobe.filter(i => i.state === 'clean');
+            let availableItems = cleanItems;
+            
+            // استبعاد الملبوس لو المستخدم مش مفعل التكرار
+            if(!appState.wardrobeSettings.allowRepeat) {
+                availableItems = cleanItems.filter(i => i.state !== 'worn');
+            }
+
+            if(availableItems.length < 3) return alert("الدولاب لا يحتوي على قطع نظيفة كافية للتنسيق! أضف ملابس أو قم بإرجاع ملابس من سلة الغسيل.");
+            
+            const occasion = prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل، فرح، خارج مع صحابي):");
+            if(!occasion) return;
+
+            showLoading("الستايلست بيقلب في الدولاب وينسق الطقم 👔...");
+            
+            const itemsDesc = availableItems.map((i, idx) => `[ID:${i.id}] القطعة: ${i.desc || i.name} (القسم: ${i.cat})`).join(' | ');
+            const wSet = appState.wardrobeSettings;
+            const profileTxt = `طول العميل: ${wSet.height}سم، الوزن: ${wSet.weight}كجم، الكتف: ${wSet.shoulder}سم، الخصر: ${wSet.waist}سم.`;
+
+            const promptText = `أنت ستايلست محترف. العميل خارج لـ: "${occasion}".
+            بيانات جسم العميل: ${profileTxt}
+            هذه القطع المتاحة النظيفة في دولابه حالياً: ${itemsDesc}.
+            المطلوب: اختر طقم متناسق تماماً (علوي، سفلي، حذاء، وعطر أو ساعة إن وجد).
+            أرجع JSON فقط:
+            {
+              "ids": ["ID القطعة 1", "ID القطعة 2"],
+              "styleName": "اسم الاستايل",
+              "reason": "شرح مفصل باللهجة المصرية ليه الألوان والقصات دي هتناسب جسمه والمناسبة دي"
+            }`;
+
+            const res = await askAI(promptText, null, "json", "جاري تنسيق الألوان والموديلات...");
+            
+            if(res && res.ids) {
+                const selectedItems = res.ids.map(id => availableItems.find(i => i.id === id)).filter(Boolean);
+                window.lastCoordinatedOutfit = { items: selectedItems, reason: res.reason, style: res.styleName };
+
+                const shareText = `مرحباً Gemini، أنا أستخدم تطبيق عائلتي. الستايلست الذكي اقترح علي هذا الطقم لـ (${occasion}):\n${selectedItems.map(i=> "- " + (i.desc||i.name)).join('\n')}\nرأيه: ${res.reason}\n\nبياناتي (طول ${wSet.height}، وزن ${wSet.weight}).\nهل لديك اقتراح لتعديل الطقم أو إضافة إكسسوارات؟`;
+                
+                const html = `
+                    <div class="text-center" dir="rtl">
+                        <h3 class="font-extrabold text-2xl text-indigo-700 mb-2">${res.styleName}</h3>
+                        <p class="text-slate-600 mb-6 leading-relaxed bg-indigo-50 p-4 rounded-xl border">${res.reason}</p>
+                        <div class="flex flex-wrap justify-center gap-4 mb-6">
+                            ${selectedItems.map(item => `
+                                <div class="bg-white p-2 rounded-xl shadow-md border flex flex-col items-center w-28">
+                                    <span class="text-[10px] text-slate-400 font-bold mb-1">${item.cat}</span>
+                                    <img src="${item.img}" class="w-full h-24 object-cover rounded-lg border border-slate-200">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <button onclick="window.markOutfitWorn('${res.ids.join(',')}')" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow hover:bg-emerald-700 transition">هلبس الطقم ده (تسجيل في السجل ✅)</button>
+                            <button onclick="window.virtualTryOnSim()" class="w-full bg-teal-600 text-white py-3 rounded-xl font-bold shadow hover:bg-teal-700 transition">غرفة القياس الذكية 🪞</button>
+                            <button onclick="window.exportToGeminiChat(\`${encodeURIComponent(shareText)}\`)" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow hover:bg-slate-900 transition flex items-center justify-center gap-2"><i class="fas fa-magic"></i> إرسال الطقم لـ Gemini لأخذ رأيه</button>
+                        </div>
+                    </div>
+                `;
+                showModal("الطقم جاهز يا بطل! 🤵", html, [{text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full"}]);
             } else {
-                window.selectedWardrobeItems.push(id); // تحديد
-            }
-            window.renderWardrobe(document.getElementById('content-area'));
-        };
-
-        window.clearWardrobeSelection = function() {
-            window.selectedWardrobeItems = [];
-            window.renderWardrobe(document.getElementById('content-area'));
-        };
-
-        window.updateBulkBarUI = function() {
-            const bar = document.getElementById('bulk-action-bar');
-            const countSpan = document.getElementById('bulk-count');
-            if(bar && countSpan) {
-                if(window.selectedWardrobeItems.length > 0) {
-                    countSpan.innerText = window.selectedWardrobeItems.length;
-                    bar.classList.remove('hidden');
-                    bar.classList.add('flex');
-                } else {
-                    bar.classList.add('hidden');
-                    bar.classList.remove('flex');
-                }
+                alert("لم يتم التنسيق بنجاح، جرب مرة أخرى أو تأكد من جودة اتصالك.");
             }
         };
 
-        window.bulkAction = function(action) {
-            const count = window.selectedWardrobeItems.length;
-            if(count === 0) return;
-
-            let confirmMsg = "";
-            if(action === 'worn') confirmMsg = `هل أنت متأكد من تسجيل (${count}) قطع كملبوسة اليوم؟`;
-            else if(action === 'dirty') confirmMsg = `هل أنت متأكد من نقل (${count}) قطع إلى سلة الغسيل؟`;
-            else if(action === 'delete') confirmMsg = `⚠️ تحذير: هل أنت متأكد من حذف (${count}) قطع نهائياً من الدولاب؟`;
-
-            showModal("تأكيد الإجراء الجماعي", `<p class="text-center font-bold text-slate-700 py-4">${confirmMsg}</p>`, [
-                {text: "إلغاء", class: "bg-slate-200 text-slate-800 font-bold"},
-                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: () => {
-                    if(action === 'delete') {
-                        appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
-                    } else {
-                        const today = new Date().toLocaleDateString('ar-EG');
-                        window.selectedWardrobeItems.forEach(id => {
-                            const item = appState.wardrobe.find(i => i.id === id);
-                            if(item) {
-                                item.state = action;
-                                if(action === 'worn') item.lastWorn = today;
-                            }
-                        });
-                    }
-                    saveState();
-                    window.clearWardrobeSelection(); // بيمسح التحديد ويعمل رندر للصفحة
-                }}
-            ]);
+        // 4. تسجيل الطقم المختار في السجل
+        window.markOutfitWorn = function(idsStr) {
+            const ids = idsStr.split(',');
+            ids.forEach(id => {
+                const item = appState.wardrobe.find(i => i.id === id);
+                if(item) { item.state = 'worn'; item.lastWorn = new Date().toLocaleDateString('ar-EG'); }
+            });
+            saveState(); navigate('wardrobe');
+            document.getElementById('custom-modal').classList.add('hidden');
+            alert("تم تسجيل الطقم في سجل اللبس بنجاح!");
         };
 
-        // زرار سحري لغسل كل السلة مرة واحدة
-        window.washAllDirty = function() {
-            showModal("غسيل كل السلة 🧺", "<p class='text-center font-bold text-slate-700 py-4'>هل قمت بغسل وتجفيف كل الملابس في السلة وتريد إرجاعها نظيفة للدولاب؟</p>", [
-                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
-                {text: "نعم، تم الغسيل 🧼", class: "bg-green-600 text-white", onClick: () => {
-                    appState.wardrobe.forEach(item => {
-                        if(item.state === 'dirty') item.state = 'clean';
-                    });
-                    saveState();
-                    window.renderWardrobe(document.getElementById('content-area'));
-                }}
-            ]);
+        // 5. إرسال الشات لجيميني الرئيسي
+        window.exportToGeminiChat = function(encodedText) {
+            const text = decodeURIComponent(encodedText);
+            const successAction = () => { window.open('https://gemini.google.com/app', '_blank'); };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(successAction).catch(() => window.fallbackCopy(text, successAction));
+            } else { window.fallbackCopy(text, successAction); }
+        };
+
+        // 6. غرفة القياس الافتراضية
+        window.virtualTryOnSim = async function() {
+            if(!window.lastCoordinatedOutfit || !window.lastCoordinatedOutfit.items) return alert("يرجى تنسيق طقم أولاً عبر العقل المدبر.");
+            
+            const profile = appState.wardrobeSettings;
+            showLoading("جاري تخيل شكل الطقم على تفاصيل جسمك...");
+            
+            const promptText = `أنت خبير أزياء وتحليل قوام.
+            بيانات العميل: الطول ${profile.height} سم، الوزن ${profile.weight} كجم.
+            العميل يرتدي الآن: ${window.lastCoordinatedOutfit.items.map(i=>i.desc||i.name).join('، ')}.
+            صف بدقة عالية جداً وباللهجة المصرية كيف سيبدو هذا الطقم على جسم العميل، وما هو الانطباع الذي سيتركه، مع نصيحة لضبط المظهر.`;
+
+            const resText = await askAI(promptText, null, "text", "جاري تحليل القوام والمقاسات...");
+            
+            const html = `
+                <div class="text-right space-y-6" dir="rtl">
+                    <div class="bg-indigo-900 text-white p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden shadow-xl">
+                        <h3 class="font-bold text-xl mb-4 relative z-10 text-teal-300"><i class="fas fa-layer-group"></i> Mood Board للطقم</h3>
+                        <div class="flex flex-col gap-2 relative z-10 w-full max-w-sm">
+                            ${window.lastCoordinatedOutfit.items.map(item => `
+                                <div class="flex items-center gap-3 bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/20">
+                                    <img src="${item.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm">
+                                    <span class="font-bold text-sm truncate flex-1">${item.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                        <h4 class="font-bold text-slate-800 text-lg mb-3 border-b pb-2"><i class="fas fa-eye text-teal-600 ml-1"></i> تحليل المظهر على قوامك</h4>
+                        <p class="text-slate-600 text-sm leading-loose whitespace-pre-wrap">${resText}</p>
+                    </div>
+                </div>
+            `;
+            openFSModal("غرفة القياس الذكية 🪞", html);
+        };
+
+        // 7. نصائح التطوير ونواقص الدولاب
+        window.getWardrobeAdviceAI = async function() {
+            if(appState.wardrobe.length === 0) return alert("الدولاب فاضي! ارفع ملابسك أولاً.");
+            const itemsDesc = appState.wardrobe.map(i => `${i.desc||i.name} (${i.cat})`).join('، ');
+            
+            showLoading("الستايلست بيراجع محتويات الدولاب...");
+            const promptText = `محتويات دولاب العميل: ${itemsDesc}.
+            بياناته: الطول ${appState.wardrobeSettings.height}، الوزن ${appState.wardrobeSettings.weight}.
+            بصفتك ستايلست محترف، اكتب تقرير باللهجة المصرية:
+            1. القطع الأساسية الناقصة (Basic Items) التي يجب عليه شراؤها ليكتمل دولابه.
+            2. نصيحة لترقية أسلوبه ليناسب جسمه.`;
+            
+            const resText = await askAI(promptText, null, "text");
+            openFSModal("تطوير المظهر ونواقص الدولاب 🛍️", `<div class="prose max-w-none text-right bg-slate-50 p-6 rounded-2xl border text-sm leading-loose whitespace-pre-wrap" dir="rtl">${resText}</div>`);
+        };
+        
+        
+        // تعديل دالة حفظ الشات لتحديث الأرشيف فوراً في نفس الصفحة
+        window.saveSmartChatSession = function() {
+            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
+            if(!appState.savedDeepChats[currentSmartSession.type]) appState.savedDeepChats[currentSmartSession.type] = [];
+            
+            const index = appState.savedDeepChats[currentSmartSession.type].findIndex(c => c.id === currentSmartSession.id);
+            if(index > -1) appState.savedDeepChats[currentSmartSession.type][index] = currentSmartSession;
+            else appState.savedDeepChats[currentSmartSession.type].unshift(currentSmartSession);
+            
+            saveState(); 
+            showModal("تم الحفظ بنجاح 💾", "<p class='text-center font-bold text-slate-700 py-4'>تم حفظ المحادثة في السجل بنجاح! يمكنك العودة إليها لاحقاً.</p>", [{text: "علم", class: "bg-teal-600 text-white"}]);
+            
+            // تحديث الشاشة فوراً لظهور المحادثة في الأرشيف
+            const cArea = document.getElementById('content-area');
+            if(cArea && cArea.innerHTML.includes('الستايلست الذكي') && currentSmartSession.type === 'wardrobe') {
+                navigate('wardrobe');
+            } else if (cArea && currentSmartSession.type === 'shopping') {
+                navigate('shopping');
+            } else if (cArea && currentSmartSession.type === 'quran') {
+                navigate('quran');
+            } else if (cArea && currentSmartSession.type === 'hadith') {
+                navigate('hadith');
+            }
         };
 
         
