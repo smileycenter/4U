@@ -6111,65 +6111,162 @@ window.closeQuranPlayer = function() {
             }
         };
 
-        // 2. تصميم وبناء واجهة الدولاب
-        window.renderWardrobe = function(c) {
-            if(!appState.wardrobe) { appState.wardrobe = []; saveState(); }
+// ==========================================
+        // 👔 منسق الملابس الذكي 2.0 (مربوط بسحابة Firebase Storage + ذكاء اصطناعي متقدم)
+        // ==========================================
 
-            // تجميع عناصر الدولاب حسب الفئة
-            const categories = {
-                'قمصان وتيشرتات': appState.wardrobe.filter(i => i.cat === 'علوي'),
-                'بناطيل وشورتات': appState.wardrobe.filter(i => i.cat === 'سفلي'),
-                'أحذية وكوتشيات': appState.wardrobe.filter(i => i.cat === 'حذاء'),
-                'عطور وإكسسوارات': appState.wardrobe.filter(i => i.cat === 'عطر')
-            };
+        // 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage
+        window.uploadWardrobeToStorage = async function(base64Data, mimeType, fileName) {
+            const bucketUrl = appState.apiKeys.fireStorageBucket;
+            if(!bucketUrl) { alert("⚠️ رابط سحابة Storage مفقود. سيتم الحفظ محلياً مؤقتاً."); return `data:${mimeType};base64,${base64Data}`; }
+            
+            try {
+                // تحويل Base64 لـ Blob لرفعه
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: mimeType});
+
+                const safeName = `wardrobe/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
+                
+                const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': mimeType } });
+                const data = await res.json();
+                return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+            } catch(e) {
+                console.error(e); return `data:${mimeType};base64,${base64Data}`; // لو فشل يرجع يحفظها محلي
+            }
+        };
+
+        // 2. الرفع المتعدد والتحليل الآلي (ملابس - عطور - ساعات)
+        window.handleBulkWardrobeUpload = async function(event, category) {
+            const files = event.target.files; if(!files.length) return;
+            showLoading(`جاري فحص ورفع ${files.length} قطعة بالذكاء الاصطناعي للسحابة ☁️...`);
+            
+            for(let i=0; i<files.length; i++) {
+                try {
+                    const b64 = await compressImageFile(files[i], 800, 0.7);
+                    let aiDesc = "";
+                    let itemName = "قطعة جديدة";
+
+                    if (category === 'عطر') {
+                        const res = await askAI("أنت خبير عطور. ما هو هذا العطر في الصورة؟ أذكر اسمه ومكوناته (النوتات العطرية الأساسية) باختصار شديد جداً. JSON: {'name': 'اسم العطر', 'notes': 'خشب صندل، حمضيات...'}", {mimeType: "image/jpeg", data: b64}, "json", "أشم العطر...");
+                        if(res) { itemName = res.name; aiDesc = res.notes; }
+                    } else if (category === 'ساعة') {
+                        const res = await askAI("صف هذه الساعة باختصار (مثال: كلاسيك جلد بني، أو رياضية سوداء). JSON: {'desc': 'الوصف'}", {mimeType: "image/jpeg", data: b64}, "json");
+                        if(res) { itemName = "ساعة"; aiDesc = res.desc; }
+                    } else {
+                        const res = await askAI(`صف قطعة الملابس هذه باختصار شديد (اللون والنوع، مثال: قميص أزرق كاروهات). JSON: {'desc': 'الوصف'}`, {mimeType: "image/jpeg", data: b64}, "json");
+                        if(res) { itemName = res.desc; aiDesc = res.desc; }
+                    }
+
+                    // رفع الصورة للسحابة
+                    const fireUrl = await uploadWardrobeToStorage(b64, "image/jpeg");
+                    
+                    appState.wardrobe.unshift({ 
+                        id: generateId(), 
+                        name: itemName, 
+                        desc: aiDesc,
+                        cat: category, 
+                        img: fireUrl, // الرابط السحابي
+                        state: 'clean', // clean, dirty, worn
+                        lastWorn: '' 
+                    });
+                } catch(e) { console.error("Error processing item:", e); }
+            }
+            saveState(); navigate('wardrobe'); hideLoading();
+        };
+
+        // 3. التحكم في حالة القطعة (غسيل - لبس)
+        window.changeItemState = function(id, newState) {
+            const item = appState.wardrobe.find(i => i.id === id);
+            if(item) { 
+                item.state = newState; 
+                if(newState === 'worn') item.lastWorn = new Date().toLocaleDateString('ar-EG');
+                saveState(); navigate('wardrobe'); 
+            }
+        };
+        window.delWardrobeItem = function(id) {
+            if(confirm("حذف القطعة نهائياً؟")) { appState.wardrobe = appState.wardrobe.filter(i => i.id !== id); saveState(); navigate('wardrobe'); }
+        };
+
+        // 4. بناء واجهة الدولاب
+        window.renderWardrobe = function(c) {
+            if(!appState.wardrobe) appState.wardrobe = [];
+            if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
+            saveState();
+
+            const cats = [
+                { id: 'علوي', name: 'ملابس علوية', items: appState.wardrobe.filter(i => i.cat === 'علوي' && i.state !== 'dirty') },
+                { id: 'سفلي', name: 'بناطيل وشورتات', items: appState.wardrobe.filter(i => i.cat === 'سفلي' && i.state !== 'dirty') },
+                { id: 'حذاء', name: 'أحذية', items: appState.wardrobe.filter(i => i.cat === 'حذاء' && i.state !== 'dirty') },
+                { id: 'ساعة', name: 'ساعات', items: appState.wardrobe.filter(i => i.cat === 'ساعة') },
+                { id: 'عطر', name: 'عطور', items: appState.wardrobe.filter(i => i.cat === 'عطر') }
+            ];
+            const dirtyItems = appState.wardrobe.filter(i => i.state === 'dirty');
+            const wornItems = appState.wardrobe.filter(i => i.state === 'worn');
+            const wSet = appState.wardrobeSettings;
 
             c.innerHTML = `
-                <div class="fade-in space-y-6 pb-20" dir="rtl">
-                    <div class="flex justify-between items-center mb-6 border-b pb-4">
-                        <h2 class="text-3xl font-extrabold text-slate-800"><i class="fas fa-tshirt text-indigo-600 ml-2"></i> منسق الملابس الذكي</h2>
+                <div class="fade-in space-y-6 pb-20 font-sans" dir="rtl">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
+                        <h2 class="text-3xl font-extrabold text-slate-800"><i class="fas fa-tshirt text-indigo-600 ml-2"></i> الستايلست الذكي (خزانتك)</h2>
+                        <button onclick="window.openSmartChat('assistant', 'شات الستايلست', 'أنت ستايلست شخصي. ساعدني في اختيار ملابسي وتنسيق الألوان وتطوير مظهري.')" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-comments"></i> شات الستايلست المخصص</button>
                     </div>
 
-                    <!-- أزرار الذكاء الاصطناعي (العقل المدبر) -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <button onclick="window.coordinateOutfitAI()" class="bg-gradient-to-r from-indigo-500 to-blue-600 text-white p-4 rounded-2xl shadow-lg hover:scale-[1.02] transition flex flex-col items-center gap-2">
-                            <i class="fas fa-magic text-3xl"></i>
-                            <span class="font-bold">تنسيق طقم لمناسبة</span>
-                        </button>
-                        <button onclick="window.getWardrobeAdviceAI()" class="bg-gradient-to-r from-purple-500 to-pink-600 text-white p-4 rounded-2xl shadow-lg hover:scale-[1.02] transition flex flex-col items-center gap-2">
-                            <i class="fas fa-search-plus text-3xl"></i>
-                            <span class="font-bold">نواقص الدولاب وتطوير المظهر</span>
-                        </button>
-                        <button onclick="window.virtualTryOnSim()" class="bg-gradient-to-r from-teal-500 to-emerald-600 text-white p-4 rounded-2xl shadow-lg hover:scale-[1.02] transition flex flex-col items-center gap-2">
-                            <i class="fas fa-street-view text-3xl"></i>
-                            <span class="font-bold">غرفة القياس الذكية (لآخر طقم)</span>
-                        </button>
+                    <!-- الملف الشخصي للستايل (المقاسات والصورة) -->
+                    <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col md:flex-row gap-6 items-center">
+                        <div class="relative group cursor-pointer w-24 h-24 md:w-32 md:h-32 shrink-0">
+                            <input type="file" id="profile-photo-inp" accept="image/*" class="hidden" onchange="window.uploadUserStylePhoto(event)">
+                            <img src="${wSet.photo || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'}" class="w-full h-full object-cover rounded-full border-4 border-indigo-500 shadow-md">
+                            <div onclick="document.getElementById('profile-photo-inp').click()" class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><i class="fas fa-camera text-2xl"></i></div>
+                        </div>
+                        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                            <div><label class="text-xs text-slate-400 block mb-1">الوزن (كجم)</label><input type="number" value="${wSet.weight}" onchange="appState.wardrobeSettings.weight=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الطول (سم)</label><input type="number" value="${wSet.height}" onchange="appState.wardrobeSettings.height=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الكتف (سم)</label><input type="number" value="${wSet.shoulder}" onchange="appState.wardrobeSettings.shoulder=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
+                            <div><label class="text-xs text-slate-400 block mb-1">الخصر (سم)</label><input type="number" value="${wSet.waist}" onchange="appState.wardrobeSettings.waist=this.value;saveState();" class="w-full bg-slate-700 p-2 rounded outline-none text-center font-bold"></div>
+                        </div>
                     </div>
 
-                    <!-- إضافة قطعة جديدة -->
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap md:flex-nowrap gap-3 items-center">
-                        <input type="text" id="w-item-name" placeholder="وصف القطعة (مثال: قميص أسود سادة)" class="flex-1 border p-3 rounded-xl outline-none focus:border-indigo-400 bg-slate-50">
-                        <select id="w-item-cat" class="border p-3 rounded-xl outline-none bg-slate-50">
-                            <option value="علوي">ملابس علوية</option>
-                            <option value="سفلي">بناطيل/سفلي</option>
-                            <option value="حذاء">أحذية</option>
-                            <option value="عطر">عطور وإكسسوارات</option>
-                        </select>
-                        <input type="file" id="w-item-img" accept="image/*" class="hidden" onchange="window.saveWardrobeItem(event)">
-                        <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow hover:bg-slate-700 transition shrink-0"><i class="fas fa-camera ml-1"></i> تصوير القطعة</button>
+                    <!-- أزرار الذكاء الاصطناعي للتنسيق -->
+                    <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+                            <h3 class="font-bold text-indigo-800 text-lg"><i class="fas fa-magic ml-1"></i> العقل المدبر لتنسيق الأطقم</h3>
+                            <label class="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white px-3 py-1.5 rounded-lg shadow-sm border cursor-pointer select-none">
+                                <input type="checkbox" class="w-4 h-4 accent-indigo-600" ${wSet.allowRepeat ? 'checked' : ''} onchange="appState.wardrobeSettings.allowRepeat = this.checked; saveState();">
+                                السماح بتكرار لبس (الأمس)
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="window.coordinateOutfitAI()" class="bg-indigo-600 text-white p-4 rounded-xl shadow-md hover:bg-indigo-700 transition flex flex-col items-center gap-2"><i class="fas fa-tshirt text-2xl"></i><span class="font-bold">تنسيق طقم كامل لمناسبة</span></button>
+                            <button onclick="window.getWardrobeAdviceAI()" class="bg-teal-600 text-white p-4 rounded-xl shadow-md hover:bg-teal-700 transition flex flex-col items-center gap-2"><i class="fas fa-search-plus text-2xl"></i><span class="font-bold">فحص نواقص الدولاب</span></button>
+                        </div>
                     </div>
 
-                    <!-- الدولاب التفاعلي -->
-                    <div class="space-y-8 mt-8">
-                        ${Object.keys(categories).map(catName => `
-                            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                <h3 class="font-bold text-slate-700 p-4 border-b border-slate-100 bg-slate-50"><i class="fas fa-tags ml-2"></i> ${catName} (${categories[catName].length} قطعة)</h3>
-                                ${categories[catName].length === 0 ? `<p class="text-center text-slate-400 py-10 font-bold">الرف فارغ، أضف ملابسك.</p>` : `
-                                    <div class="wardrobe-container custom-scrollbar">
-                                        ${categories[catName].map((item, idx) => `
-                                            <div class="hanger-item w-32 shrink-0 group flex flex-col items-center" id="w-item-${item.id}" onclick="window.playPullOutAnim('${item.id}')">
-                                                <div class="w-24 h-4 border-b-4 border-slate-400 rounded-t-full mb-1 opacity-50 relative"><div class="w-4 h-6 border-4 border-slate-400 border-b-0 rounded-t-full absolute -top-5 left-1/2 transform -translate-x-1/2"></div></div>
-                                                <img src="data:image/jpeg;base64,${item.img}" class="w-full h-40 object-cover rounded-xl shadow-lg border-4 border-white">
-                                                <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="absolute top-8 left-0 bg-red-500 text-white w-6 h-6 rounded-full opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times text-[10px]"></i></button>
+                    <!-- الدولاب (الأقسام) -->
+                    <div class="space-y-6">
+                        ${cats.map(cat => `
+                            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div class="bg-slate-50 p-4 border-b flex justify-between items-center">
+                                    <h3 class="font-bold text-slate-700"><i class="fas fa-tags ml-2"></i> ${cat.name} (${cat.items.length})</h3>
+                                    <div class="flex gap-2">
+                                        <input type="file" id="w-bulk-${cat.id}" accept="image/*" multiple class="hidden" onchange="window.handleBulkWardrobeUpload(event, '${cat.id}')">
+                                        <button onclick="document.getElementById('w-bulk-${cat.id}').click()" class="bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-slate-900 transition"><i class="fas fa-upload ml-1"></i> رفع متعدد</button>
+                                    </div>
+                                </div>
+                                ${cat.items.length === 0 ? `<p class="text-center text-slate-400 py-6 font-bold text-sm">لا يوجد قطع نظيفة هنا.</p>` : `
+                                    <div class="p-4 flex gap-4 overflow-x-auto custom-scrollbar">
+                                        ${cat.items.map(item => `
+                                            <div class="w-32 shrink-0 group flex flex-col relative border p-2 rounded-xl bg-white shadow-sm hover:border-indigo-300 transition">
+                                                <img src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border cursor-pointer" onclick="showModal('تفاصيل', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-3 font-bold text-center\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                <span class="text-[10px] text-slate-500 text-center mt-2 truncate font-bold" title="${item.desc}">${item.desc || item.name}</span>
+                                                <div class="absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+                                                    <button onclick="window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-indigo-600">لُبس اليوم</button>
+                                                    <button onclick="window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-orange-600">للسلة 🧺</button>
+                                                    <button onclick="window.delWardrobeItem('${item.id}')" class="bg-red-500 text-white text-[10px] px-2 py-1 rounded w-3/4 font-bold hover:bg-red-600">حذف</button>
+                                                </div>
                                             </div>
                                         `).join('')}
                                     </div>
@@ -6177,158 +6274,154 @@ window.closeQuranPlayer = function() {
                             </div>
                         `).join('')}
                     </div>
+
+                    <!-- سلة الغسيل وسجل اللبس -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <!-- سلة الغسيل -->
+                        <div class="bg-orange-50 p-5 rounded-2xl border border-orange-200 shadow-sm">
+                            <h3 class="font-bold text-orange-800 text-lg mb-4 border-b border-orange-200 pb-2"><i class="fas fa-shopping-basket ml-1"></i> سلة الغسيل المتسخ</h3>
+                            <div class="flex flex-wrap gap-3">
+                                ${dirtyItems.length === 0 ? '<span class="text-sm text-slate-500">السلة فارغة</span>' : dirtyItems.map(item => `
+                                    <div class="relative w-16 h-16 group">
+                                        <img src="${item.img}" class="w-full h-full object-cover rounded-lg border-2 border-orange-300 opacity-70">
+                                        <button onclick="window.changeItemState('${item.id}', 'clean')" class="absolute inset-0 bg-green-500/80 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center text-center">تم الغسيل</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- سجل اللبس -->
+                        <div class="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 class="font-bold text-slate-800 text-lg mb-4 border-b border-slate-300 pb-2"><i class="fas fa-history ml-1"></i> سجل الأطقم (المُستخدم مؤخراً)</h3>
+                            <div class="flex flex-wrap gap-3 max-h-40 overflow-y-auto custom-scrollbar">
+                                ${wornItems.length === 0 ? '<span class="text-sm text-slate-500">لا يوجد سجل حالياً</span>' : wornItems.sort((a,b)=> new Date(b.lastWorn) - new Date(a.lastWorn)).map(item => `
+                                    <div class="bg-white p-2 rounded-lg border shadow-sm flex items-center gap-2 w-full md:w-auto">
+                                        <img src="${item.img}" class="w-10 h-10 object-cover rounded">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-slate-700">${item.lastWorn}</span>
+                                            <button onclick="window.changeItemState('${item.id}', 'clean')" class="text-[10px] text-blue-600 font-bold text-right hover:underline">إرجاع للدولاب</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
         };
 
-        // 3. رفع وحفظ الملابس
-        window.saveWardrobeItem = async function(event) {
-            const file = event.target.files[0];
-            const name = document.getElementById('w-item-name').value.trim();
-            const cat = document.getElementById('w-item-cat').value;
-            
-            if(!file || !name) return alert("يرجى كتابة وصف القطعة واختيار صورة!");
-            
-            showLoading("جاري تعليق القطعة في الدولاب...");
-            try {
-                const b64 = await compressImageFile(file, 600, 0.7);
-                appState.wardrobe.unshift({ id: generateId(), name, cat, img: b64 });
-                saveState();
-                renderWardrobe(document.getElementById('content-area'));
-            } catch(e) { alert("حدث خطأ أثناء حفظ الصورة."); }
-            hideLoading();
+        // دالة رفع الصورة الشخصية
+        window.uploadUserStylePhoto = async function(e) {
+            const f = e.target.files[0]; if(!f) return;
+            showLoading("جاري الحفظ...");
+            const b64 = await compressImageFile(f, 600, 0.7);
+            const url = await uploadWardrobeToStorage(b64, "image/jpeg");
+            appState.wardrobeSettings.photo = url;
+            saveState(); navigate('wardrobe'); hideLoading();
         };
 
-        window.delWardrobeItem = function(id) {
-            if(confirm("هل أنت متأكد من رمي هذه القطعة من الدولاب؟")) {
-                appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
-                saveState();
-                renderWardrobe(document.getElementById('content-area'));
-            }
-        };
-
-        // حركة السحب من الدولاب
-        window.playPullOutAnim = function(id) {
-            const el = document.getElementById(`w-item-${id}`);
-            if(el) {
-                el.classList.add('pull-out-anim');
-                setTimeout(() => el.classList.remove('pull-out-anim'), 800);
-            }
-        };
-
-        // 4. الذكاء الاصطناعي لتنسيق طقم
-        window.lastCoordinatedOutfit = null; // ذاكرة مؤقتة لغرفة القياس
-
+        // 5. التنسيق الذكي (مع إرسال رابط لجيميني)
         window.coordinateOutfitAI = async function() {
-            if(appState.wardrobe.length < 3) return alert("يرجى إضافة قطع كافية للدولاب أولاً (تيشرتات، بناطيل، وأحذية).");
+            const cleanItems = appState.wardrobe.filter(i => i.state === 'clean');
+            let availableItems = cleanItems;
             
-            const occasion = prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل، فرح، خارج مع صحابي، ديت):");
+            // استبعاد الملبوس لو المستخدم مش مفعل التكرار
+            if(!appState.wardrobeSettings.allowRepeat) {
+                availableItems = cleanItems.filter(i => i.state !== 'worn');
+            }
+
+            if(availableItems.length < 3) return alert("الدولاب لا يحتوي على قطع نظيفة كافية للتنسيق!");
+            
+            const occasion = prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل، فرح، ديت):");
             if(!occasion) return;
 
-            showLoading("العقل المدبر بيقلب في الدولاب وينسق الطقم...");
+            showLoading("الستايلست بيقلب في الدولاب وينسق الطقم 👔...");
             
-            // تحضير الصور للـ AI
-            const b64Array = appState.wardrobe.map(i => ({ mimeType: "image/jpeg", data: i.img }));
-            const itemsDesc = appState.wardrobe.map((i, idx) => `رقم ${idx}: ${i.name} (${i.cat})`).join(' | ');
+            // لأن الصور على فايربيز (روابط)، هنبعت روابط للذكاء؟ 
+            // جيميني (عن طريق API حالياً) محتاج Base64، هنحاول نبعت الوصف الدقيق اللي استخرجناه وقت الرفع.
+            const itemsDesc = availableItems.map((i, idx) => `[ID:${i.id}] القطعة: ${i.desc} (القسم: ${i.cat})`).join(' | ');
+            const wSet = appState.wardrobeSettings;
+            const profileTxt = `طول العميل: ${wSet.height}سم، الوزن: ${wSet.weight}كجم، الكتف: ${wSet.shoulder}سم، الخصر: ${wSet.waist}سم.`;
 
-            const promptText = `أنت خبير أزياء مصري (Stylist). العميل ذاهب إلى: "${occasion}".
-            لديه هذه القطع في دولابه: [${itemsDesc}]. (الصور المرفقة مرتبة بنفس الترتيب).
-            اختر أفضل طقم متناسق تماماً (قطعة علوية، قطعة سفلية، حذاء، وعطر إن وجد) ليناسب هذه الخروجة.
+            const promptText = `أنت ستايلست محترف. العميل خارج لـ: "${occasion}".
+            بيانات جسم العميل: ${profileTxt}
+            هذه القطع المتاحة النظيفة في دولابه حالياً: ${itemsDesc}.
+            المطلوب: اختر طقم متناسق تماماً (علوي، سفلي، حذاء، وعطر أو ساعة إن وجد).
             أرجع JSON فقط:
             {
-              "indexes": [أرقام القطع المختارة كأرقام صحيحة],
-              "styleName": "اسم الاستايل (مثال: كاجوال شيك)",
-              "reason": "شرح مفصل باللهجة المصرية ليه القطع دي لايقة على بعض وليه مناسبة للخروجة دي"
+              "ids": ["ID القطعة 1", "ID القطعة 2"],
+              "styleName": "اسم الاستايل",
+              "reason": "شرح مفصل باللهجة المصرية ليه الألوان والقصات دي هتناسب جسمه والمناسبة دي"
             }`;
 
-            const res = await askAI(promptText, b64Array, "json", "جاري تنسيق الألوان والموديلات...");
+            const res = await askAI(promptText, null, "json", "جاري تنسيق الألوان والموديلات...");
             
-            if(res && res.indexes) {
-                const selectedItems = res.indexes.map(idx => appState.wardrobe[idx]).filter(Boolean);
-                window.lastCoordinatedOutfit = { items: selectedItems, reason: res.reason, style: res.styleName };
+            if(res && res.ids) {
+                const selectedItems = res.ids.map(id => availableItems.find(i => i.id === id)).filter(Boolean);
                 
-                // تشغيل أنيميشن سحب القطع المختارة من الدولاب
-                selectedItems.forEach((item, i) => setTimeout(() => window.playPullOutAnim(item.id), i * 300));
-
+                // تجهيز النص علشان يتبعت لـ Gemini
+                const shareText = `مرحباً، أنا أستخدم تطبيق عائلتي. الستايلست الذكي اقترح علي هذا الطقم لـ (${occasion}):\n${selectedItems.map(i=> "- " + i.desc).join('\n')}\nرأيه: ${res.reason}\n\nبياناتي (طول ${wSet.height}، وزن ${wSet.weight}).\nهل لديك اقتراح لتعديل الطقم أو إضافة إكسسوارات؟`;
+                
                 const html = `
                     <div class="text-center" dir="rtl">
                         <h3 class="font-extrabold text-2xl text-indigo-700 mb-2">${res.styleName}</h3>
-                        <p class="text-slate-600 mb-6 leading-relaxed">${res.reason}</p>
-                        <div class="flex flex-wrap justify-center gap-4 bg-slate-50 p-6 rounded-2xl border shadow-inner">
+                        <p class="text-slate-600 mb-6 leading-relaxed bg-indigo-50 p-4 rounded-xl border">${res.reason}</p>
+                        <div class="flex flex-wrap justify-center gap-4 mb-6">
                             ${selectedItems.map(item => `
-                                <div class="bg-white p-2 rounded-xl shadow-md flex flex-col items-center w-32 border border-slate-100">
+                                <div class="bg-white p-2 rounded-xl shadow-md border flex flex-col items-center w-28">
                                     <span class="text-[10px] text-slate-400 font-bold mb-1">${item.cat}</span>
-                                    <img src="data:image/jpeg;base64,${item.img}" class="w-full h-32 object-cover rounded-lg border border-slate-200">
-                                    <span class="font-bold text-xs mt-2 text-slate-700 truncate w-full text-center" title="${item.name}">${item.name}</span>
+                                    <img src="${item.img}" class="w-full h-24 object-cover rounded-lg border">
                                 </div>
                             `).join('')}
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <button onclick="window.markOutfitWorn('${res.ids.join(',')}')" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow hover:bg-emerald-700 transition">هلبس الطقم ده (تسجيل في السجل ✅)</button>
+                            <button onclick="window.exportToGeminiChat(\`${encodeURIComponent(shareText)}\`)" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow hover:bg-slate-900 transition flex items-center justify-center gap-2"><i class="fas fa-magic"></i> إرسال الطقم لـ Gemini لأخذ رأيه</button>
                         </div>
                     </div>
                 `;
-                setTimeout(() => showModal("الطقم جاهز يا بطل! 🤵", html, [
-                    {text: "غرفة القياس الذكية", class: "bg-teal-600 text-white w-full", onClick: window.virtualTryOnSim},
-                    {text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full"}
-                ]), 1000);
+                showModal("الطقم جاهز يا بطل! 🤵", html, [{text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full"}]);
             } else {
-                alert("لم أتمكن من تنسيق طقم من القطع الحالية، حاول إضافة المزيد.");
+                alert("لم يتم التنسيق بنجاح، جرب مرة أخرى.");
             }
         };
 
-        // 5. غرفة القياس الافتراضية الذكية (البديل العملي للـ Image Generation)
-        window.virtualTryOnSim = async function() {
-            if(!window.lastCoordinatedOutfit || !window.lastCoordinatedOutfit.items) return alert("يرجى تنسيق طقم أولاً عبر زر 'تنسيق طقم لمناسبة'.");
-            
-            const profile = appState.profiles['husband'] || appState.profiles['wife'] || { weight: 80, height: 175 }; // افتراضي
-            const b64Array = window.lastCoordinatedOutfit.items.map(i => ({ mimeType: "image/jpeg", data: i.img }));
-            
-            showLoading("جاري تخيل شكل الطقم على تفاصيل جسمك...");
-            
-            const promptText = `أنت خبير أزياء وتحليل قوام (Image Consultant).
-            بيانات العميل: الطول ${profile.height} سم، الوزن ${profile.weight} كجم.
-            العميل يرتدي الآن القطع المرفقة في الصور (الطقم المنسق).
-            صف بدقة عالية جداً وباللهجة المصرية كيف سيبدو هذا الطقم على جسم العميل بناءً على طوله ووزنه، كيف ستنعكس الألوان على بعضها، وما هو الانطباع الذي سيتركه. اخلق صورة بصرية بكلماتك.`;
+        // تسجيل الطقم إنه اتلبس
+        window.markOutfitWorn = function(idsStr) {
+            const ids = idsStr.split(',');
+            ids.forEach(id => {
+                const item = appState.wardrobe.find(i => i.id === id);
+                if(item) { item.state = 'worn'; item.lastWorn = new Date().toLocaleDateString('ar-EG'); }
+            });
+            saveState(); navigate('wardrobe');
+            document.getElementById('custom-modal').classList.add('hidden');
+            alert("تم تسجيل الطقم في سجل اللبس بنجاح!");
+        };
 
-            const resText = await askAI(promptText, b64Array, "text", "جاري تحليل القوام والمقاسات...");
-            
-            const html = `
-                <div class="text-right space-y-6" dir="rtl">
-                    <div class="bg-indigo-900 text-white p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden shadow-xl">
-                        <i class="fas fa-street-view absolute opacity-10 text-9xl -right-4 -bottom-4"></i>
-                        <h3 class="font-bold text-xl mb-4 relative z-10 text-teal-300"><i class="fas fa-layer-group"></i> Mood Board للطقم</h3>
-                        <div class="flex flex-col gap-2 relative z-10 w-full max-w-sm">
-                            ${window.lastCoordinatedOutfit.items.map(item => `
-                                <div class="flex items-center gap-3 bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/20">
-                                    <img src="data:image/jpeg;base64,${item.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm">
-                                    <span class="font-bold text-sm truncate flex-1">${item.name}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <h4 class="font-bold text-slate-800 text-lg mb-3 border-b pb-2"><i class="fas fa-eye text-teal-600 ml-1"></i> تحليل المظهر على قوامك</h4>
-                        <p class="text-slate-600 text-sm leading-loose whitespace-pre-wrap">${resText}</p>
-                    </div>
-                </div>
-            `;
-            openFSModal("غرفة القياس الذكية 🪞", html);
+        // التصدير لـ Gemini
+        window.exportToGeminiChat = function(encodedText) {
+            const text = decodeURIComponent(encodedText);
+            const successAction = () => { window.open('https://gemini.google.com/app', '_blank'); };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(successAction).catch(() => window.fallbackCopy(text, successAction));
+            } else { window.fallbackCopy(text, successAction); }
         };
 
         // 6. نصائح الشراء والتطوير
         window.getWardrobeAdviceAI = async function() {
             if(appState.wardrobe.length === 0) return alert("الدولاب فاضي! ارفع ملابسك أولاً.");
-            const itemsDesc = appState.wardrobe.map(i => `${i.name} (${i.cat})`).join('، ');
+            const itemsDesc = appState.wardrobe.map(i => `${i.desc} (${i.cat})`).join('، ');
             
-            showLoading("الخبير بيراجع محتويات الدولاب...");
-            const promptText = `هذه محتويات دولاب العميل الحالية: ${itemsDesc}.
-            بصفتك ستايلست محترف، اكتب تقرير باللهجة المصرية يوضح:
-            1. ما هي القطع الأساسية الناقصة (Basic Items) التي يجب عليه شراؤها ليكمل دولابه؟
-            2. نصيحة لترقية أسلوبه (Style Upgrade) ليصبح أكثر أناقة وجاذبية.`;
+            showLoading("الستايلست بيراجع محتويات الدولاب...");
+            const promptText = `محتويات دولاب العميل: ${itemsDesc}.
+            بياناته: الطول ${appState.wardrobeSettings.height}، الوزن ${appState.wardrobeSettings.weight}.
+            بصفتك ستايلست محترف، اكتب تقرير باللهجة المصرية:
+            1. القطع الأساسية الناقصة (Basic Items) التي يجب عليه شراؤها.
+            2. نصيحة لترقية أسلوبه (Style Upgrade) ليناسب جسمه.`;
             
-            const resText = await askAI(promptText, null, "text", "جاري استخراج نواقص الدولاب...");
-            
+            const resText = await askAI(promptText, null, "text");
             openFSModal("تطوير المظهر ونواقص الدولاب 🛍️", `<div class="prose max-w-none text-right bg-slate-50 p-6 rounded-2xl border text-sm leading-loose whitespace-pre-wrap" dir="rtl">${resText}</div>`);
         };
-
 
 
 
