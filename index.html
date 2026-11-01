@@ -6276,8 +6276,8 @@ window.closeQuranPlayer = function() {
             }
         };
 
-   // ==========================================
-        // 🛠️ دوال التحكم في الدولاب (الحذف، تغيير الحالة، التحديد)
+// ==========================================
+        // 🛠️ دوال التحكم الشاملة في الدولاب
         // ==========================================
 
         // 1. تغيير حالة القطعة (لبس / سلة / نظيف)
@@ -6293,7 +6293,17 @@ window.closeQuranPlayer = function() {
             }
         };
 
-        // 2. الحذف الشامل لقطعة واحدة (من التطبيق ومن السحابة)
+        // 2. غسيل كل القطع اللي في السلة (ترجع نظيفة للدولاب)
+        window.washAllDirty = function() {
+            appState.wardrobe.forEach(item => {
+                if(item.state === 'dirty') item.state = 'clean';
+            });
+            saveState();
+            navigate('wardrobe');
+            alert("تم غسيل جميع الملابس في السلة وإعادتها للدولاب نظيفة! ✨");
+        };
+
+        // 3. الحذف الفردي (من البرنامج ومن Firebase Storage)
         window.delWardrobeItem = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if(!item) return;
@@ -6309,23 +6319,19 @@ window.closeQuranPlayer = function() {
                             const endIndex = item.img.indexOf('?');
                             const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
                             const filePath = decodeURIComponent(encodedPath);
-                            
                             const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
                             await fetch(deleteUrl, { method: 'DELETE' });
                         }
                     } catch (e) {
-                        console.error("فشل حذف الصورة من فايربيز:", e);
+                        console.error("فشل الحذف من السحابة:", e);
                     }
-
                     appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
-                    saveState(); 
-                    hideLoading();
-                    navigate('wardrobe');
+                    saveState(); hideLoading(); navigate('wardrobe');
                 }}
             ]);
         };
 
-        // 3. الإجراء الجماعي للمحدد (لبس / سلة / حذف من السحابة)
+        // 4. الإجراء الجماعي للمحدد (لبس / سلة / حذف نهائي من السحابة)
         window.bulkAction = async function(action) {
             const count = window.selectedWardrobeItems.length;
             if(count === 0) return;
@@ -6346,7 +6352,6 @@ window.closeQuranPlayer = function() {
                                     const endIndex = item.img.indexOf('?');
                                     const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
                                     const filePath = decodeURIComponent(encodedPath);
-                                    
                                     const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
                                     await fetch(deleteUrl, { method: 'DELETE' });
                                 } catch(err) {
@@ -6371,7 +6376,7 @@ window.closeQuranPlayer = function() {
         };
 
         // ==========================================
-        // 👔 واجهة الدولاب المحدثة
+        // 👔 واجهة الدولاب (تم ربط جميع الأزرار بنجاح)
         // ==========================================
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
@@ -6496,7 +6501,6 @@ window.closeQuranPlayer = function() {
                                                 
                                                 <span class="text-[11px] text-slate-700 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
                                                 
-                                                <!-- 🔴 التعديل السحري: إضافة event.stopPropagation() لضمان عمل الأزرار بدون تعارض -->
                                                 <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-slate-100">
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="لُبس اليوم">لبس</button>
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="للسلة">سلة</button>
