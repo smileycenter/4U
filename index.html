@@ -6304,9 +6304,16 @@ window.closeQuranPlayer = function() {
         };
 
 // ==========================================
-        // 3. بناء واجهة الدولاب المحدثة (مع التكبير المباشر بالضغط على الصورة)
+        // 3. بناء واجهة الدولاب المحدثة (مؤمنة ضد أخطاء التحديد)
         // ==========================================
+        
+        // 🛡️ تعريف الذاكرة خارجياً تحسباً لأي مسح
+        window.selectedWardrobeItems = window.selectedWardrobeItems || [];
+
         window.renderWardrobe = function(c) {
+            // 🛡️ خط حماية داخلي: التأكد من وجود مصفوفة التحديد دائماً لمنع خطأ (includes)
+            window.selectedWardrobeItems = window.selectedWardrobeItems || [];
+
             if(!appState.wardrobe) appState.wardrobe = [];
             if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
             saveState();
@@ -6410,22 +6417,22 @@ window.closeQuranPlayer = function() {
                                             return `
                                             <div id="w-card-${item.id}" class="w-32 shrink-0 group flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'} p-2 rounded-xl shadow-sm transition-all cursor-pointer" onclick="window.toggleItemSelection('${item.id}')">
                                                 
-                                                <!-- مربع التحديد (مساحة أكبر لسهولة الضغط على الموبايل) -->
+                                                <!-- مربع التحديد -->
                                                 <div class="absolute top-2 right-2 z-10 bg-white/90 rounded-md shadow-sm border border-slate-200 w-8 h-8 flex items-center justify-center hover:bg-slate-100 transition" onclick="event.stopPropagation(); window.toggleItemSelection('${item.id}')">
                                                     <input type="checkbox" id="w-check-${item.id}" class="w-5 h-5 accent-indigo-600 pointer-events-none" ${isSelected ? 'checked' : ''}>
                                                 </div>
 
-                                                <!-- زر التكبير العائم على الصورة (عدسة مكبرة) -->
+                                                <!-- زر التكبير العائم على الصورة -->
                                                 <div class="absolute top-2 left-2 z-10 bg-black/50 text-white rounded-md w-7 h-7 flex items-center justify-center hover:bg-black/80 transition" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
                                                     <i class="fas fa-search-plus text-xs"></i>
                                                 </div>
 
-                                                <!-- الصورة نفسها (الضغط عليها يكبرها فوراً ولا يحددها) -->
+                                                <!-- الصورة نفسها -->
                                                 <img id="w-img-${item.id}" src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border border-slate-200 ${isSelected ? 'opacity-80' : ''}" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
                                                 
                                                 <span class="text-[10px] text-slate-600 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
                                                 
-                                                <!-- القائمة السريعة للقطعة الواحدة (تظهر بالهوفر فقط إذا لم يكن هناك تحديد متعدد) -->
+                                                <!-- القائمة السريعة للقطعة الواحدة -->
                                                 <div id="w-quick-${item.id}" class="w-quick-menu absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex-col items-center justify-center gap-2 backdrop-blur-sm z-20" style="${window.selectedWardrobeItems.length > 0 ? 'display: none;' : 'display: flex;'}">
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-indigo-600 shadow"><i class="fas fa-check-double"></i> لُبس اليوم</button>
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-orange-600 shadow"><i class="fas fa-shopping-basket"></i> للسلة</button>
@@ -6442,7 +6449,6 @@ window.closeQuranPlayer = function() {
 
                     <!-- سلة الغسيل وسجل الأطقم -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                        <!-- سلة الغسيل المتسخ -->
                         <div class="bg-orange-50 p-5 rounded-2xl border border-orange-200 shadow-sm">
                             <h3 class="font-bold text-orange-800 text-lg mb-4 border-b border-orange-200 pb-2 flex justify-between items-center">
                                 <span><i class="fas fa-shopping-basket ml-1"></i> سلة الغسيل (${dirtyItems.length})</span>
@@ -6458,7 +6464,6 @@ window.closeQuranPlayer = function() {
                             </div>
                         </div>
                         
-                        <!-- سجل الأطقم (المُستخدم مؤخراً) -->
                         <div class="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-sm">
                             <h3 class="font-bold text-slate-800 text-lg mb-4 border-b border-slate-300 pb-2"><i class="fas fa-history ml-1"></i> سجل القطع الملبوسة مؤخراً</h3>
                             <div class="flex flex-wrap gap-3 max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -6478,7 +6483,7 @@ window.closeQuranPlayer = function() {
                         </div>
                     </div>
 
-                    <!-- أرشيف جلسات الستايلست (شات) -->
+                    <!-- أرشيف جلسات الستايلست -->
                     <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-200 shadow-inner mt-8">
                         <h3 class="font-bold text-xl mb-4 border-b border-indigo-300 pb-2 text-indigo-800"><i class="fas fa-comments ml-2"></i> أرشيف نصائح الستايلست الذكي</h3>
                         <div class="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
@@ -6501,6 +6506,7 @@ window.closeQuranPlayer = function() {
             setTimeout(window.updateBulkBarUI, 100);
         };
 
+        
         // 2. رفع الصورة الشخصية للستايلست
         window.uploadUserStylePhoto = async function(e) {
             const f = e.target.files[0]; if(!f) return;
