@@ -7973,7 +7973,8 @@ function runAutoResets() {
 
 
 
-        // دالة الحذف الشاملة (للقطعة المفردة من الدولاب ومن سحابة Firebase Storage نهائياً)
+
+// دالة الحذف الشاملة (للقطعة المفردة من الدولاب ومن سحابة Firebase Storage نهائياً وبدقة)
         window.delWardrobeItem = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if(!item) return;
@@ -7985,18 +7986,26 @@ function runAutoResets() {
                     try {
                         if (item.img && item.img.includes('firebasestorage.googleapis.com')) {
                             const bucketUrl = "home-9ba3b.firebasestorage.app";
-                            const startIndex = item.img.indexOf('/o/') + 3;
-                            const endIndex = item.img.indexOf('?');
-                            const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
-                            const filePath = decodeURIComponent(encodedPath);
                             
-                            const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
-                            await fetch(deleteUrl, { method: 'DELETE' });
+                            // استخراج مسار الملف بدقة متناهية من رابط الـ URL
+                            const baseUrlObj = new URL(item.img);
+                            const pathMatch = baseUrlObj.pathname.match(/\/o\/(.+)$/);
+                            
+                            if (pathMatch && pathMatch[1]) {
+                                const filePath = decodeURIComponent(pathMatch[1].split('?')[0]);
+                                const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
+                                
+                                const res = await fetch(deleteUrl, { method: 'DELETE' });
+                                if (!res.ok && res.status !== 404) {
+                                    console.warn("فشل الحذف السحابي، ربما تم حذفها مسبقاً أو مشكلة صلاحيات.");
+                                }
+                            }
                         }
                     } catch (e) {
-                        console.error("فشل حذف الصورة من فايربيز:", e);
+                        console.error("خطأ في الاتصال بالسحابة أثناء الحذف:", e);
                     }
 
+                    // الحذف من ذاكرة وتخزين التطبيق المحلي والسحابي العام
                     appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
                     saveState(); 
                     hideLoading();
@@ -8004,7 +8013,6 @@ function runAutoResets() {
                 }}
             ]);
         };
-
 
 
 
