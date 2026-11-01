@@ -6113,13 +6113,10 @@ window.closeQuranPlayer = function() {
             }
         };
 
-// 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage
+// 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage (مثبتة بالرابط الصحيح نهائياً)
         window.uploadWardrobeToStorage = async function(base64Data, mimeType) {
-            const bucketUrl = appState.apiKeys.fireStorageBucket;
-            if(!bucketUrl) { 
-                console.warn("⚠️ رابط سحابة Storage مفقود. سيتم الحفظ محلياً مؤقتاً."); 
-                return `data:${mimeType};base64,${base64Data}`; 
-            }
+            // الرابط الصحيح المثبت لمنع أي خطأ في الحفظ
+            const bucketUrl = "home-9ba3b.firebasestorage.app";
             
             try {
                 // تحويل Base64 لـ Blob لرفعه للسحابة
@@ -6133,6 +6130,9 @@ window.closeQuranPlayer = function() {
                 const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
                 
                 const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': mimeType } });
+                
+                if(!res.ok) throw new Error("مرفوض من فايربيز (Status: " + res.status + ")");
+                
                 const data = await res.json();
                 
                 if(data.name) {
@@ -6141,7 +6141,7 @@ window.closeQuranPlayer = function() {
                     throw new Error("لم يرجع رابط صحيح من فايربيز");
                 }
             } catch(e) {
-                console.error("فشل الرفع للسحابة، التخزين المحلي كبديل:", e); 
+                console.error("فشل الرفع للسحابة، تم التخزين المحلي كبديل:", e); 
                 return `data:${mimeType};base64,${base64Data}`; 
             }
         };
