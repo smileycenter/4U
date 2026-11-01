@@ -6302,7 +6302,9 @@ window.closeQuranPlayer = function() {
             ]);
         };
 
-// 2. بناء واجهة الدولاب (مع إضافة زر اختيار الوصف الذكي)
+// ==========================================
+        // 3. واجهة الدولاب (محدثة ومنظمة: أزرار تحت الصورة لتسهيل التحديد تماماً)
+        // ==========================================
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
         window.renderWardrobe = function(c) {
@@ -6392,7 +6394,7 @@ window.closeQuranPlayer = function() {
                         <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-slate-900 transition shrink-0 flex items-center gap-2"><i class="fas fa-camera text-lg"></i> تصوير وإضافة</button>
                     </div>
 
-                    <!-- الدولاب (الأقسام المدمجة مع خيار الوصف الذكي) -->
+                    <!-- رفوف الدولاب (تصميم جديد مريح وبدون قوائم شفافة مزعجة) -->
                     <div class="space-y-6 mt-8">
                         ${cats.map(cat => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -6400,7 +6402,7 @@ window.closeQuranPlayer = function() {
                                     <h3 class="font-bold text-slate-700"><i class="fas fa-tags ml-2"></i> ${cat.name} (${cat.items.length})</h3>
                                     
                                     <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-                                        <label class="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition select-none" title="تفعيل ليقوم الذكاء الاصطناعي بكتابة وصف للصورة. إيقاف للرفع السريع جداً.">
+                                        <label class="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition select-none">
                                             <input type="checkbox" id="ai-desc-${cat.id}" class="w-3.5 h-3.5 accent-indigo-600">
                                             وصف ذكي 🤖
                                         </label>
@@ -6413,28 +6415,26 @@ window.closeQuranPlayer = function() {
                                         ${cat.items.map(item => {
                                             const isSelected = window.selectedWardrobeItems.includes(item.id);
                                             return `
-                                            <div id="w-card-${item.id}" class="w-32 shrink-0 group flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'} p-2 rounded-xl shadow-sm transition-all cursor-pointer" onclick="window.toggleItemSelection('${item.id}')">
+                                            <div id="w-card-${item.id}" class="w-36 shrink-0 flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'} p-2 rounded-xl shadow-sm transition-all">
                                                 
-                                                <!-- مربع التحديد -->
-                                                <div class="absolute top-2 right-2 z-10 bg-white/90 rounded-md shadow-sm border border-slate-200 w-8 h-8 flex items-center justify-center hover:bg-slate-100 transition" onclick="event.stopPropagation(); window.toggleItemSelection('${item.id}')">
-                                                    <input type="checkbox" id="w-check-${item.id}" class="w-5 h-5 accent-indigo-600 pointer-events-none" ${isSelected ? 'checked' : ''}>
-                                                </div>
-
-                                                <!-- زر التكبير العائم على الصورة -->
-                                                <div class="absolute top-2 left-2 z-10 bg-black/50 text-white rounded-md w-7 h-7 flex items-center justify-center hover:bg-black/80 transition" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                                                    <i class="fas fa-search-plus text-xs"></i>
+                                                <!-- شريط علوي للصورة: زر التكبير ومربع التحديد -->
+                                                <div class="flex justify-between items-center mb-1.5 px-1">
+                                                    <div onclick="showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])" class="cursor-pointer text-slate-400 hover:text-indigo-600 text-xs" title="تكبير الصورة">
+                                                        <i class="fas fa-search-plus"></i> تكبير
+                                                    </div>
+                                                    <input type="checkbox" id="w-check-${item.id}" class="w-5 h-5 accent-indigo-600 cursor-pointer" ${isSelected ? 'checked' : ''} onchange="window.toggleItemSelection('${item.id}')">
                                                 </div>
 
                                                 <!-- الصورة نفسها -->
-                                                <img id="w-img-${item.id}" src="${item.img}" class="w-full h-32 object-cover rounded-lg shadow-sm border border-slate-200 ${isSelected ? 'opacity-80' : ''}" onclick="event.stopPropagation(); showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                <img id="w-img-${item.id}" src="${item.img}" class="w-full h-28 object-cover rounded-lg shadow-sm border border-slate-200 cursor-pointer hover:opacity-90 transition" onclick="window.toggleItemSelection('${item.id}')" title="اضغط للتحديد">
                                                 
-                                                <span class="text-[10px] text-slate-600 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
+                                                <span class="text-[11px] text-slate-700 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
                                                 
-                                                <!-- القائمة السريعة للقطعة الواحدة -->
-                                                <div id="w-quick-${item.id}" class="w-quick-menu absolute inset-0 bg-black/60 rounded-xl opacity-0 group-hover:opacity-100 transition flex-col items-center justify-center gap-2 backdrop-blur-sm z-20" style="${window.selectedWardrobeItems.length > 0 ? 'display: none;' : 'display: flex;'}">
-                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-indigo-600 shadow"><i class="fas fa-check-double"></i> لُبس اليوم</button>
-                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-orange-600 shadow"><i class="fas fa-shopping-basket"></i> للسلة</button>
-                                                    <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-500 text-white text-[10px] px-2 py-1.5 rounded w-3/4 font-bold hover:bg-red-600 shadow"><i class="fas fa-trash"></i> حذف</button>
+                                                <!-- أزرار تحكم سريعة وثابتة تحت كل قطعة (بدون تغطية الصورة) -->
+                                                <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-slate-100">
+                                                    <button onclick="window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="لُبس اليوم">لبس</button>
+                                                    <button onclick="window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="للسلة">سلة</button>
+                                                    <button onclick="window.delWardrobeItem('${item.id}')" class="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="حذف القطعة">حذف</button>
                                                 </div>
                                             </div>
                                             `;
