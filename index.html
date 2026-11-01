@@ -6276,17 +6276,85 @@ window.closeQuranPlayer = function() {
             }
         };
 
-        // زرار الأكشن الجماعي (هو اللي بيعمل ريفريش في النهاية بس لنقل القطع)
-        window.bulkAction = function(action) {
+   // ==========================================
+        // 🛠️ دوال التحكم في الدولاب (الحذف، تغيير الحالة، التحديد)
+        // ==========================================
+
+        // 1. تغيير حالة القطعة (لبس / سلة / نظيف)
+        window.changeItemState = function(id, newState) {
+            const item = appState.wardrobe.find(i => i.id === id);
+            if(item) {
+                item.state = newState;
+                if(newState === 'worn') {
+                    item.lastWorn = new Date().toLocaleDateString('ar-EG');
+                }
+                saveState();
+                navigate('wardrobe');
+            }
+        };
+
+        // 2. الحذف الشامل لقطعة واحدة (من التطبيق ومن السحابة)
+        window.delWardrobeItem = async function(id) {
+            const item = appState.wardrobe.find(i => i.id === id);
+            if(!item) return;
+
+            showModal("تأكيد الحذف", "<p class='text-center font-bold text-slate-700 py-4'>هل تريد حذف هذه القطعة نهائياً من الدولاب ومن السحابة؟</p>", [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
+                {text: "نعم، حذف نهائي 🗑️", class: "bg-red-600 text-white", onClick: async () => {
+                    showLoading("جاري الحذف من السحابة والبرنامج...");
+                    try {
+                        if (item.img && item.img.includes('firebasestorage.googleapis.com')) {
+                            const bucketUrl = "home-9ba3b.firebasestorage.app";
+                            const startIndex = item.img.indexOf('/o/') + 3;
+                            const endIndex = item.img.indexOf('?');
+                            const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
+                            const filePath = decodeURIComponent(encodedPath);
+                            
+                            const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
+                            await fetch(deleteUrl, { method: 'DELETE' });
+                        }
+                    } catch (e) {
+                        console.error("فشل حذف الصورة من فايربيز:", e);
+                    }
+
+                    appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
+                    saveState(); 
+                    hideLoading();
+                    navigate('wardrobe');
+                }}
+            ]);
+        };
+
+        // 3. الإجراء الجماعي للمحدد (لبس / سلة / حذف من السحابة)
+        window.bulkAction = async function(action) {
             const count = window.selectedWardrobeItems.length;
             if(count === 0) return;
 
-            let msg = action === 'worn' ? `تسجيل (${count}) قطع كملبوسة اليوم؟` : action === 'dirty' ? `نقل (${count}) قطع لسلة الغسيل؟` : `حذف (${count}) قطع نهائياً؟`;
+            let msg = action === 'worn' ? `تسجيل (${count}) قطع كملبوسة اليوم؟` : action === 'dirty' ? `نقل (${count}) قطع لسلة الغسيل؟` : `⚠️ تحذير: حذف (${count}) قطع نهائياً من البرنامج ومن السحابة؟`;
 
-            showModal("تأكيد الإجراء", `<p class="text-center font-bold py-4">${msg}</p>`, [
+            showModal("تأكيد الإجراء الجماعي", `<p class="text-center font-bold py-4">${msg}</p>`, [
                 {text: "إلغاء", class: "bg-slate-200 text-slate-800", onClick: () => window.clearWardrobeSelection()},
-                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: () => {
+                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: async () => {
                     if(action === 'delete') {
+                        showLoading("جاري الحذف الجماعي من السحابة...");
+                        for(const id of window.selectedWardrobeItems) {
+                            const item = appState.wardrobe.find(i => i.id === id);
+                            if(item && item.img && item.img.includes('firebasestorage.googleapis.com')) {
+                                try {
+                                    const bucketUrl = "home-9ba3b.firebasestorage.app";
+                                    const startIndex = item.img.indexOf('/o/') + 3;
+                                    const endIndex = item.img.indexOf('?');
+                                    const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
+                                    const filePath = decodeURIComponent(encodedPath);
+                                    
+                                    const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
+                                    await fetch(deleteUrl, { method: 'DELETE' });
+                                } catch(err) {
+                                    console.error("خطأ في حذف ملف من السحابة:", err);
+                                }
+                            }
+                        }
+                        hideLoading();
                         appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
                     } else {
                         const today = new Date().toLocaleDateString('ar-EG');
@@ -6295,15 +6363,15 @@ window.closeQuranPlayer = function() {
                             if(item) { item.state = action; if(action === 'worn') item.lastWorn = today; }
                         });
                     }
-                    window.selectedWardrobeItems = []; // تصفير الذاكرة قبل الحفظ
+                    window.selectedWardrobeItems = []; 
                     saveState();
-                    navigate('wardrobe'); // ريفريش لنقل القطع لأماكنها الجديدة
+                    navigate('wardrobe'); 
                 }}
             ]);
         };
 
-// ==========================================
-        // 3. واجهة الدولاب (محدثة ومنظمة: أزرار تحت الصورة لتسهيل التحديد تماماً)
+        // ==========================================
+        // 👔 واجهة الدولاب المحدثة
         // ==========================================
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
@@ -6394,7 +6462,7 @@ window.closeQuranPlayer = function() {
                         <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-slate-900 transition shrink-0 flex items-center gap-2"><i class="fas fa-camera text-lg"></i> تصوير وإضافة</button>
                     </div>
 
-                    <!-- رفوف الدولاب (تصميم جديد مريح وبدون قوائم شفافة مزعجة) -->
+                    <!-- رفوف الدولاب -->
                     <div class="space-y-6 mt-8">
                         ${cats.map(cat => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -6417,7 +6485,6 @@ window.closeQuranPlayer = function() {
                                             return `
                                             <div id="w-card-${item.id}" class="w-36 shrink-0 flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'} p-2 rounded-xl shadow-sm transition-all">
                                                 
-                                                <!-- شريط علوي للصورة: زر التكبير ومربع التحديد -->
                                                 <div class="flex justify-between items-center mb-1.5 px-1">
                                                     <div onclick="showModal('تفاصيل القطعة', '<img src=\\'${item.img}\\' class=\\'w-full rounded-xl\\'><p class=\\'mt-4 font-bold text-center text-lg text-slate-700 bg-slate-100 p-3 rounded-lg border\\'>${item.desc||item.name}</p>', [{text:'إغلاق',class:'bg-slate-200'}])" class="cursor-pointer text-slate-400 hover:text-indigo-600 text-xs" title="تكبير الصورة">
                                                         <i class="fas fa-search-plus"></i> تكبير
@@ -6425,16 +6492,15 @@ window.closeQuranPlayer = function() {
                                                     <input type="checkbox" id="w-check-${item.id}" class="w-5 h-5 accent-indigo-600 cursor-pointer" ${isSelected ? 'checked' : ''} onchange="window.toggleItemSelection('${item.id}')">
                                                 </div>
 
-                                                <!-- الصورة نفسها -->
                                                 <img id="w-img-${item.id}" src="${item.img}" class="w-full h-28 object-cover rounded-lg shadow-sm border border-slate-200 cursor-pointer hover:opacity-90 transition" onclick="window.toggleItemSelection('${item.id}')" title="اضغط للتحديد">
                                                 
                                                 <span class="text-[11px] text-slate-700 text-center mt-2 truncate font-bold px-1" title="${item.desc}">${item.desc || item.name}</span>
                                                 
-                                                <!-- أزرار تحكم سريعة وثابتة تحت كل قطعة (بدون تغطية الصورة) -->
+                                                <!-- 🔴 التعديل السحري: إضافة event.stopPropagation() لضمان عمل الأزرار بدون تعارض -->
                                                 <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-slate-100">
-                                                    <button onclick="window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="لُبس اليوم">لبس</button>
-                                                    <button onclick="window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="للسلة">سلة</button>
-                                                    <button onclick="window.delWardrobeItem('${item.id}')" class="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] py-1 rounded font-bold transition text-center" title="حذف القطعة">حذف</button>
+                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="لُبس اليوم">لبس</button>
+                                                    <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="للسلة">سلة</button>
+                                                    <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="حذف القطعة">حذف</button>
                                                 </div>
                                             </div>
                                             `;
@@ -6478,25 +6544,6 @@ window.closeQuranPlayer = function() {
                                     </div>
                                 `).join('')}
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- أرشيف جلسات الستايلست -->
-                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-200 shadow-inner mt-8">
-                        <h3 class="font-bold text-xl mb-4 border-b border-indigo-300 pb-2 text-indigo-800"><i class="fas fa-comments ml-2"></i> أرشيف نصائح الستايلست الذكي</h3>
-                        <div class="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-                            ${wChats.length === 0 ? '<p class="text-center text-slate-400 py-6 font-bold">لا يوجد جلسات محفوظة. ابدأ شات الستايلست بالأعلى!</p>' : wChats.map(c => `
-                                <div class="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm relative mb-3">
-                                    <div class="flex justify-between items-center mb-2 border-b pb-2">
-                                        <h4 class="font-bold text-indigo-700 text-sm truncate max-w-[60%]">${c.title}</h4>
-                                        <div class="flex gap-2">
-                                            <button onclick="window.openSmartChat('wardrobe', '${c.title ? c.title.replace(/'/g,"\\'") : 'محادثة ستايلست'}', null, '${c.id}')" class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fas fa-eye"></i> استكمال</button>
-                                            <button onclick="window.delSmartChat('wardrobe', '${c.id}')" class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-bold transition"><i class="fas fa-trash"></i></button>
-                                        </div>
-                                    </div>
-                                    <p class="text-xs text-slate-500 font-bold"><i class="far fa-calendar-alt ml-1"></i> التاريخ: ${c.date} | ${c.messages ? c.messages.length : 0} رسالة</p>
-                                </div>
-                            `).join('')}
                         </div>
                     </div>
                 </div>
@@ -7974,40 +8021,7 @@ function runAutoResets() {
 
 
 
-window.delWardrobeItem = async function(id) {
-            const item = appState.wardrobe.find(i => i.id === id);
-            if(!item) return;
 
-            showModal("تأكيد الحذف", "<p class='text-center font-bold text-slate-700 py-4'>هل تريد حذف هذه القطعة نهائياً من الدولاب ومن السحابة؟</p>", [
-                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
-                {text: "نعم، حذف نهائي 🗑️", class: "bg-red-600 text-white", onClick: async () => {
-                    showLoading("جاري الحذف من السحابة والبرنامج...");
-                    try {
-                        if (item.img && item.img.includes('firebasestorage.googleapis.com')) {
-                            const bucketUrl = "home-9ba3b.firebasestorage.app";
-                            const startIndex = item.img.indexOf('/o/') + 3;
-                            const endIndex = item.img.indexOf('?');
-                            const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
-                            const filePath = decodeURIComponent(encodedPath);
-                            
-                            const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
-                            await fetch(deleteUrl, { method: 'DELETE' });
-                        }
-                    } catch (e) {
-                        console.error("فشل الحذف من السحابة:", e);
-                    }
-
-                    // 1. مسح العنصر من مصفوفة الدولاب
-                    appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
-                    
-                    // 2. حفظ الحالة فوراً محلياً وعلى سحابة فايربيز لمنع رجوعها
-                    saveState(); 
-                    
-                    hideLoading();
-                    navigate('wardrobe');
-                }}
-            ]);
-        };
 
 
 
