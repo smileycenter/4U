@@ -7973,6 +7973,45 @@ function runAutoResets() {
 
 
 
+        // دالة الحذف الشاملة (للقطعة المفردة من الدولاب ومن سحابة Firebase Storage نهائياً)
+        window.delWardrobeItem = async function(id) {
+            const item = appState.wardrobe.find(i => i.id === id);
+            if(!item) return;
+
+            showModal("تأكيد الحذف", "<p class='text-center font-bold text-slate-700 py-4'>هل تريد حذف هذه القطعة نهائياً من الدولاب ومن السحابة؟</p>", [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
+                {text: "نعم، حذف نهائي 🗑️", class: "bg-red-600 text-white", onClick: async () => {
+                    showLoading("جاري الحذف من السحابة والبرنامج...");
+                    try {
+                        if (item.img && item.img.includes('firebasestorage.googleapis.com')) {
+                            const bucketUrl = "home-9ba3b.firebasestorage.app";
+                            const startIndex = item.img.indexOf('/o/') + 3;
+                            const endIndex = item.img.indexOf('?');
+                            const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
+                            const filePath = decodeURIComponent(encodedPath);
+                            
+                            const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
+                            await fetch(deleteUrl, { method: 'DELETE' });
+                        }
+                    } catch (e) {
+                        console.error("فشل حذف الصورة من فايربيز:", e);
+                    }
+
+                    appState.wardrobe = appState.wardrobe.filter(i => i.id !== id);
+                    saveState(); 
+                    hideLoading();
+                    navigate('wardrobe');
+                }}
+            ]);
+        };
+
+
+
+
+
+        
+
+
     </script>
 </body>
 </html>
