@@ -6329,8 +6329,19 @@ window.closeQuranPlayer = function() {
                     saveState(); hideLoading(); navigate('wardrobe');
                 }}
             ]);
-        };
+     };
 
+
+
+
+
+        
+
+
+
+
+
+        
         // 4. تعديل وصف القطعة
         window.editWardrobeItemDesc = function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
@@ -6357,6 +6368,68 @@ window.closeQuranPlayer = function() {
             ]);
         };
 
+
+
+
+// 5. دالة الاسترجاع الذكي (تجلب الصور اليتيمة من فايربيز وتردها للتطبيق)
+        window.recoverWardrobeFromCloud = async function() {
+            showLoading("جاري البحث في السحابة واسترجاع ملابسك ☁️🔍...");
+            try {
+                const bucketUrl = "home-9ba3b.firebasestorage.app";
+                // طلب قائمة بكل الملفات اللي جوه مجلد wardrobe في السحابة
+                const listUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?prefix=wardrobe/`;
+                
+                const res = await fetch(listUrl);
+                if (!res.ok) throw new Error("لا يمكن الوصول للسحابة");
+                
+                const data = await res.json();
+                if (!data.items || data.items.length === 0) {
+                    hideLoading();
+                    return alert("السحابة فارغة، لا يوجد صور لاسترجاعها.");
+                }
+
+                let recoveredCount = 0;
+                
+                data.items.forEach(item => {
+                    // تكوين الرابط المباشر للصورة
+                    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(item.name)}?alt=media`;
+                    
+                    // فحص هل الصورة دي موجودة في الدولاب ولا ضايعة؟
+                    const exists = appState.wardrobe.find(w => w.img === fileUrl);
+                    
+                    if (!exists) {
+                        appState.wardrobe.unshift({
+                            id: generateId(),
+                            name: "قطعة مسترجعة",
+                            desc: "قطعة مسترجعة (يرجى تعديل الوصف)",
+                            cat: "علوي", // هتنزل في القسم ده مؤقتاً لحين تعديلك ليها
+                            img: fileUrl,
+                            state: "clean",
+                            lastWorn: ""
+                        });
+                        recoveredCount++;
+                    }
+                });
+
+                saveState();
+                hideLoading();
+                navigate('wardrobe');
+                
+                if (recoveredCount > 0) {
+                    showModal("تم الاسترجاع بنجاح 🎉", `<p class='text-center font-bold text-slate-700 py-4'>تم العثور على <b>${recoveredCount}</b> صورة في السحابة وتم إرجاعهم لدولابك!<br><br><span class='text-sm text-slate-500'>ملاحظة: تم وضعهم في قسم (ملابس علوية)، يمكنك تغيير القسم وتعديل الوصف باستخدام زر التعديل.</span></p>`, [{text: "عاش 👏", class: "bg-teal-600 text-white"}]);
+                } else {
+                    alert("جميع الصور الموجودة في السحابة معروضة بالفعل في دولابك، ولا يوجد شيء مفقود.");
+                }
+
+            } catch (e) {
+                console.error(e);
+                hideLoading();
+                alert("حدث خطأ أثناء الاسترجاع. تأكد من اتصالك بالإنترنت.");
+            }
+        };
+
+
+        
         // 5. الإجراء الجماعي للمحدد (لبس / سلة / حذف نهائي من السحابة)
         window.bulkAction = async function(action) {
             const count = window.selectedWardrobeItems.length;
