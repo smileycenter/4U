@@ -6113,109 +6113,121 @@ window.closeQuranPlayer = function() {
             }
         };
 
-// 1. دالة الرفع المباشر لصور الدولاب على Firebase Storage (مثبتة بالرابط الصحيح نهائياً)
-        window.uploadWardrobeToStorage = async function(base64Data, mimeType) {
-            // الرابط الصحيح المثبت لمنع أي خطأ في الحفظ
+// 1. دالة الرفع المحدثة (تختم اسم القسم على الصورة في السحابة)
+        window.uploadWardrobeToStorage = async function(base64Data, mimeType, category = 'علوي') {
             const bucketUrl = "home-9ba3b.firebasestorage.app";
-            
             try {
-                // تحويل Base64 لـ Blob لرفعه للسحابة
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], {type: mimeType});
 
-                const safeName = `wardrobe/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                // 💡 السر هنا: دمج اسم القسم في اسم الملف على السحابة (مثال: طبي_168449...jpg)
+                const safeName = `wardrobe/${encodeURIComponent(category)}_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
                 const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
                 
                 const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': mimeType } });
-                
-                if(!res.ok) throw new Error("مرفوض من فايربيز (Status: " + res.status + ")");
-                
+                if(!res.ok) throw new Error("مرفوض من فايربيز");
                 const data = await res.json();
-                
-                if(data.name) {
-                    return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
-                } else {
-                    throw new Error("لم يرجع رابط صحيح من فايربيز");
-                }
+                if(data.name) return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+                else throw new Error("لم يرجع رابط صحيح");
             } catch(e) {
-                console.error("فشل الرفع للسحابة، تم التخزين المحلي كبديل:", e); 
-                return `data:${mimeType};base64,${base64Data}`; 
+                console.error("فشل الرفع:", e); return `data:${mimeType};base64,${base64Data}`; 
             }
         };
 
-// 1. دالة الرفع المتعدد (صاروخية وتدعم الإيقاف الاختياري للذكاء الاصطناعي)
+        // 2. دالة الرفع المتعدد (نرسل القسم ليتم ختمه)
         window.handleBulkWardrobeUpload = async function(event, category) {
             const files = event.target.files; if(!files.length) return;
-            
-            // قراءة حالة مربع "الوصف الذكي"
             const useAI = document.getElementById(`ai-desc-${category}`)?.checked;
-            
-            showLoading(useAI ? `جاري المعالجة الذكية والرفع لـ ${files.length} قطعة 🤖...` : `جاري الرفع السريع لـ ${files.length} قطعة للسحابة ⚡...`);
+            showLoading(useAI ? `جاري المعالجة والرفع لـ ${files.length} قطعة...` : `جاري الرفع لـ ${files.length} قطعة...`);
             
             for(let i=0; i<files.length; i++) {
                 try {
                     const storageB64 = await compressImageFile(files[i], 800, 0.7);
-                    let aiDesc = "";
-                    let itemName = `قطعة ${category} جديدة`;
-
-                    // لو المستخدم مفعل الذكاء الاصطناعي
+                    let aiDesc = "", itemName = `قطعة ${category} جديدة`;
+                    
                     if (useAI) {
                         try {
                             const aiB64 = await compressImageFile(files[i], 400, 0.5);
-                            let promptStr = "صف قطعة الملابس هذه في 3 كلمات فقط (اللون والنوع). JSON: {'desc': 'الوصف'}";
-                            if (category === 'عطر') promptStr = "ما اسم هذا العطر؟ (كلمتين فقط). JSON: {'desc': 'الاسم'}";
-                            if (category === 'ساعة' || category === 'إكسسوار') promptStr = "صف هذه القطعة في كلمتين. JSON: {'desc': 'الوصف'}";
-                            
-                            const res = await askAI(promptStr, {mimeType: "image/jpeg", data: aiB64}, "json", `أحلل القطعة ${i+1}...`);
+                            let p = "صف هذه القطعة بـ 3 كلمات. JSON: {'desc': 'الوصف'}";
+                            if (category === 'عطر') p = "ما اسم العطر؟ JSON: {'desc': 'الاسم'}";
+                            const res = await askAI(p, {mimeType: "image/jpeg", data: aiB64}, "json", `تحليل ${i+1}...`);
                             if(res && res.desc) { itemName = res.desc; aiDesc = res.desc; }
-                        } catch (aiError) {
-                            console.warn("تم تخطي الذكاء الاصطناعي لهذه القطعة");
-                        }
+                        } catch (aiError) { console.warn("تم تخطي الذكاء"); }
                     }
-
-                    // الرفع للسحابة مباشرة (سواء بذكاء أو بدون)
-                    const fireUrl = await uploadWardrobeToStorage(storageB64, "image/jpeg");
                     
-                    appState.wardrobe.unshift({ 
-                        id: generateId(), name: itemName, desc: aiDesc, cat: category, 
-                        img: fireUrl, state: 'clean', lastWorn: '' 
-                    });
-                } catch(e) { console.error("خطأ في رفع قطعة:", e); }
+                    // إرسال القسم (category) للختم
+                    const fireUrl = await uploadWardrobeToStorage(storageB64, "image/jpeg", category);
+                    appState.wardrobe.unshift({ id: generateId(), name: itemName, desc: aiDesc, cat: category, img: fireUrl, state: 'clean', lastWorn: '' });
+                } catch(e) { console.error("خطأ:", e); }
             }
-            
-            event.target.value = ''; // تصفير حقل الرفع للسماح برفع نفس الصورة مجدداً إن لزم
-            saveState(); navigate('wardrobe'); hideLoading();
+            event.target.value = ''; saveState(); navigate('wardrobe'); hideLoading();
         };
 
-        // 3. الإضافة اليدوية (تم ترقيتها للرفع على السحابة أيضاً)
+        // 3. الإضافة اليدوية (نرسل القسم للختم)
         window.saveWardrobeItem = async function(event) {
             const file = event.target.files[0];
             const name = document.getElementById('w-item-name').value.trim();
             const cat = document.getElementById('w-item-cat').value;
-            
             if(!file || !name) return alert("يرجى كتابة وصف القطعة واختيار صورة!");
             
-            showLoading("جاري ضغط القطعة ورفعها للسحابة ☁️...");
+            showLoading("جاري الرفع ☁️...");
             try {
                 const b64 = await compressImageFile(file, 800, 0.7);
-                const fireUrl = await uploadWardrobeToStorage(b64, "image/jpeg");
-                
-                appState.wardrobe.unshift({ 
-                    id: generateId(), name, desc: name, cat, 
-                    img: fireUrl, state: 'clean', lastWorn: '' 
-                });
-                
-                saveState();
-                navigate('wardrobe'); 
-            } catch(e) { 
-                alert("حدث خطأ أثناء حفظ ورفع الصورة."); 
-            }
+                // إرسال القسم (cat) للختم
+                const fireUrl = await uploadWardrobeToStorage(b64, "image/jpeg", cat);
+                appState.wardrobe.unshift({ id: generateId(), name, desc: name, cat, img: fireUrl, state: 'clean', lastWorn: '' });
+                saveState(); navigate('wardrobe'); 
+            } catch(e) { alert("حدث خطأ."); }
             hideLoading();
         };
 
+        // 4. المزامنة الصامتة (تقرأ ختم القسم من الملف نفسه وترجعه مكانه)
+        window.isRecoveringWardrobe = false;
+        window.autoRecoverWardrobeFromCloud = async function() {
+            if (window.isRecoveringWardrobe) return;
+            window.isRecoveringWardrobe = true;
+            try {
+                const bucketUrl = "home-9ba3b.firebasestorage.app";
+                const listUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?prefix=wardrobe/`;
+                const res = await fetch(listUrl);
+                if (!res.ok) throw new Error("Network Error");
+                const data = await res.json();
+                if (!data.items || data.items.length === 0) { window.isRecoveringWardrobe = false; return; }
+
+                let recoveredCount = 0;
+                data.items.forEach(item => {
+                    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(item.name)}?alt=media`;
+                    const exists = appState.wardrobe.find(w => w.img === fileUrl);
+                    
+                    if (!exists) {
+                        // 💡 استنتاج القسم من اسم الملف המرفوع في السحابة
+                        let finalCat = "علوي"; // الافتراضي للصور القديمة
+                        try {
+                            const fileNamePart = item.name.split('/')[1]; // استخراج ما بعد مجلد wardrobe
+                            const extractedCat = decodeURIComponent(fileNamePart.split('_')[0]); // أول كلمة قبل _
+                            const validCats = ['طبي', 'علوي', 'سفلي', 'حذاء', 'عطر', 'ساعة', 'إكسسوار'];
+                            if(validCats.includes(extractedCat)) finalCat = extractedCat;
+                        } catch(err) {}
+
+                        appState.wardrobe.unshift({
+                            id: generateId(), name: "قطعة مسترجعة", desc: "مسترجعة من السحابة",
+                            cat: finalCat, img: fileUrl, state: "clean", lastWorn: ""
+                        });
+                        recoveredCount++;
+                    }
+                });
+
+                if (recoveredCount > 0) {
+                    saveState();
+                    if (document.getElementById('w-item-name')) navigate('wardrobe');
+                    setTimeout(() => { alert(`الستايلست الذكي لاحظ وجود (${recoveredCount}) قطعة مفقودة ورجعها في أماكنها الصحيحة! 🪄`); }, 500);
+                }
+            } catch (e) { console.error(e); } 
+            finally { window.isRecoveringWardrobe = false; }
+        };
 
 
         
@@ -6474,8 +6486,9 @@ window.closeQuranPlayer = function() {
             ]);
         };
 
+
         // ==========================================
-        // 👔 واجهة الدولاب (مع إضافة زر التعديل الجديد)
+        // 👔 واجهة الدولاب (محدثة بالمزامنة التلقائية)
         // ==========================================
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
@@ -6598,7 +6611,6 @@ window.closeQuranPlayer = function() {
 
                                                 <img id="w-img-${item.id}" src="${item.img}" class="w-full h-28 object-cover rounded-lg shadow-sm border border-slate-200 cursor-pointer hover:opacity-90 transition" onclick="window.toggleItemSelection('${item.id}')" title="اضغط للتحديد">
                                                 
-                                                <!-- 🔴 التعديل الجديد: اسم القطعة وزر التعديل في نفس السطر -->
                                                 <div class="flex justify-between items-center mt-2 px-1 gap-1">
                                                     <span class="text-[11px] text-slate-700 truncate font-bold flex-1 text-right" title="${item.desc}">${item.desc || item.name}</span>
                                                     <button onclick="event.stopPropagation(); window.editWardrobeItemDesc('${item.id}')" class="text-blue-600 hover:text-blue-800 text-[10px] bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded transition shadow-sm flex-shrink-0" title="تعديل الوصف"><i class="fas fa-edit"></i></button>
@@ -6656,6 +6668,9 @@ window.closeQuranPlayer = function() {
                 </div>
             `;
             setTimeout(window.updateBulkBarUI, 100);
+            
+            // ☁️ المزامنة التلقائية الصامتة مع السحابة عند فتح الصفحة
+            setTimeout(window.autoRecoverWardrobeFromCloud, 500);
         };
         
         // 2. رفع الصورة الشخصية للستايلست
