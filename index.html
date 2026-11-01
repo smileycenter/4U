@@ -6146,48 +6146,47 @@ window.closeQuranPlayer = function() {
             }
         };
 
-        // 2. الرفع المتعدد والتحليل الآلي (مع الضغط المزدوج لحل مشكلة الاتصال)
+// 1. دالة الرفع المتعدد (صاروخية وتدعم الإيقاف الاختياري للذكاء الاصطناعي)
         window.handleBulkWardrobeUpload = async function(event, category) {
             const files = event.target.files; if(!files.length) return;
-            showLoading(`جاري ضغط ورفع ${files.length} قطعة للسحابة ☁️...`);
+            
+            // قراءة حالة مربع "الوصف الذكي"
+            const useAI = document.getElementById(`ai-desc-${category}`)?.checked;
+            
+            showLoading(useAI ? `جاري المعالجة الذكية والرفع لـ ${files.length} قطعة 🤖...` : `جاري الرفع السريع لـ ${files.length} قطعة للسحابة ⚡...`);
             
             for(let i=0; i<files.length; i++) {
                 try {
-                    // 💡 الضغط القاسي (للذكاء الاصطناعي فقط) عشان ميستهلكش النت ويفصل
-                    const aiB64 = await compressImageFile(files[i], 400, 0.5);
-                    // 💡 الضغط المتوسط (لسحابة Firebase) عشان الصورة تفضل جودتها كويسة في الدولاب
                     const storageB64 = await compressImageFile(files[i], 800, 0.7);
-                    
                     let aiDesc = "";
-                    let itemName = "قطعة جديدة";
+                    let itemName = `قطعة ${category} جديدة`;
 
-                    // 🛡️ شبكة الأمان: محاولة استخدام الذكاء الاصطناعي
-                    try {
-                        if (category === 'عطر') {
-                            const res = await askAI("أنت خبير عطور. ما هو هذا العطر في الصورة؟ أذكر اسمه ومكوناته باختصار. JSON: {'name': 'اسم العطر', 'notes': 'مكونات...'}", {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل العطر...");
-                            if(res) { itemName = res.name; aiDesc = res.notes; }
-                        } else if (category === 'ساعة' || category === 'إكسسوار') {
-                            const res = await askAI("صف هذه القطعة باختصار. JSON: {'desc': 'الوصف'}", {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل القطعة...");
-                            if(res) { itemName = category; aiDesc = res.desc; }
-                        } else {
-                            const res = await askAI(`صف هذه القطعة باختصار شديد (اللون والنوع). JSON: {'desc': 'الوصف'}`, {mimeType: "image/jpeg", data: aiB64}, "json", "أحلل الملابس...");
-                            if(res) { itemName = res.desc; aiDesc = res.desc; }
+                    // لو المستخدم مفعل الذكاء الاصطناعي
+                    if (useAI) {
+                        try {
+                            const aiB64 = await compressImageFile(files[i], 400, 0.5);
+                            let promptStr = "صف قطعة الملابس هذه في 3 كلمات فقط (اللون والنوع). JSON: {'desc': 'الوصف'}";
+                            if (category === 'عطر') promptStr = "ما اسم هذا العطر؟ (كلمتين فقط). JSON: {'desc': 'الاسم'}";
+                            if (category === 'ساعة' || category === 'إكسسوار') promptStr = "صف هذه القطعة في كلمتين. JSON: {'desc': 'الوصف'}";
+                            
+                            const res = await askAI(promptStr, {mimeType: "image/jpeg", data: aiB64}, "json", `أحلل القطعة ${i+1}...`);
+                            if(res && res.desc) { itemName = res.desc; aiDesc = res.desc; }
+                        } catch (aiError) {
+                            console.warn("تم تخطي الذكاء الاصطناعي لهذه القطعة");
                         }
-                    } catch (aiError) {
-                        console.warn("تم تخطي الذكاء الاصطناعي مؤقتاً بسبب الاتصال.");
-                        itemName = "قطعة " + category;
-                        aiDesc = "تمت الإضافة بدون وصف ذكي";
                     }
 
-                    // الرفع على سحابة فايربيز باستخدام الصورة ذات الجودة المتوسطة
+                    // الرفع للسحابة مباشرة (سواء بذكاء أو بدون)
                     const fireUrl = await uploadWardrobeToStorage(storageB64, "image/jpeg");
                     
                     appState.wardrobe.unshift({ 
                         id: generateId(), name: itemName, desc: aiDesc, cat: category, 
                         img: fireUrl, state: 'clean', lastWorn: '' 
                     });
-                } catch(e) { console.error("خطأ في معالجة ورفع القطعة:", e); }
+                } catch(e) { console.error("خطأ في رفع قطعة:", e); }
             }
+            
+            event.target.value = ''; // تصفير حقل الرفع للسماح برفع نفس الصورة مجدداً إن لزم
             saveState(); navigate('wardrobe'); hideLoading();
         };
 
@@ -6303,17 +6302,11 @@ window.closeQuranPlayer = function() {
             ]);
         };
 
-// ==========================================
-        // 3. بناء واجهة الدولاب المحدثة (مؤمنة ضد أخطاء التحديد)
-        // ==========================================
-        
-        // 🛡️ تعريف الذاكرة خارجياً تحسباً لأي مسح
+// 2. بناء واجهة الدولاب (مع إضافة زر اختيار الوصف الذكي)
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
         window.renderWardrobe = function(c) {
-            // 🛡️ خط حماية داخلي: التأكد من وجود مصفوفة التحديد دائماً لمنع خطأ (includes)
             window.selectedWardrobeItems = window.selectedWardrobeItems || [];
-
             if(!appState.wardrobe) appState.wardrobe = [];
             if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
             saveState();
@@ -6399,15 +6392,20 @@ window.closeQuranPlayer = function() {
                         <button onclick="document.getElementById('w-item-img').click()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-slate-900 transition shrink-0 flex items-center gap-2"><i class="fas fa-camera text-lg"></i> تصوير وإضافة</button>
                     </div>
 
-                    <!-- الدولاب (الأقسام المدمجة مع مربعات التحديد والتكبير) -->
+                    <!-- الدولاب (الأقسام المدمجة مع خيار الوصف الذكي) -->
                     <div class="space-y-6 mt-8">
                         ${cats.map(cat => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                                <div class="bg-slate-50 p-4 border-b flex justify-between items-center">
+                                <div class="bg-slate-50 p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                                     <h3 class="font-bold text-slate-700"><i class="fas fa-tags ml-2"></i> ${cat.name} (${cat.items.length})</h3>
-                                    <div class="flex gap-2">
+                                    
+                                    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                                        <label class="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition select-none" title="تفعيل ليقوم الذكاء الاصطناعي بكتابة وصف للصورة. إيقاف للرفع السريع جداً.">
+                                            <input type="checkbox" id="ai-desc-${cat.id}" class="w-3.5 h-3.5 accent-indigo-600">
+                                            وصف ذكي 🤖
+                                        </label>
                                         <input type="file" id="w-bulk-${cat.id}" accept="image/*" multiple class="hidden" onchange="window.handleBulkWardrobeUpload(event, '${cat.id}')">
-                                        <button onclick="document.getElementById('w-bulk-${cat.id}').click()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-900 transition flex items-center gap-2"><i class="fas fa-upload"></i> رفع متعدد ذكي</button>
+                                        <button onclick="document.getElementById('w-bulk-${cat.id}').click()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-900 transition flex items-center gap-2"><i class="fas fa-upload"></i> رفع متعدد</button>
                                     </div>
                                 </div>
                                 ${cat.items.length === 0 ? `<p class="text-center text-slate-400 py-6 font-bold text-sm">الرف فارغ حالياً.</p>` : `
@@ -6505,7 +6503,6 @@ window.closeQuranPlayer = function() {
             `;
             setTimeout(window.updateBulkBarUI, 100);
         };
-
         
         // 2. رفع الصورة الشخصية للستايلست
         window.uploadUserStylePhoto = async function(e) {
