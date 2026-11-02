@@ -6902,82 +6902,120 @@ window.closeQuranPlayer = function() {
             saveState(); navigate('wardrobe'); hideLoading();
         };
 
-        // 5. التنسيق الذكي (مع إرسال رابط لجيميني)
-        window.coordinateOutfitAI = async function() {
+// ==========================================
+        // 5. التنسيق الذكي المتطور (مع الإجبار على التنويع وزر الرفض)
+        // ==========================================
+        window.lastCoordinatedOutfit = null;
+        
+        window.coordinateOutfitAI = async function(rejectedIds = []) {
             const cleanItems = appState.wardrobe.filter(i => i.state === 'clean');
             let availableItems = cleanItems;
             
-            // استبعاد الملبوس لو المستخدم مش مفعل التكرار
+            // استبعاد الملابس اللي اتلبست لو التكرار مقفول
             if(!appState.wardrobeSettings.allowRepeat) {
                 availableItems = cleanItems.filter(i => i.state !== 'worn');
             }
 
-            if(availableItems.length < 3) return alert("الدولاب لا يحتوي على قطع نظيفة كافية للتنسيق!");
+            // استبعاد الملابس اللي إنت لسه رافضها في الطقم اللي قبله
+            if(rejectedIds.length > 0) {
+                availableItems = availableItems.filter(i => !rejectedIds.includes(i.id));
+            }
+
+            // تقسيم الملابس لأقسام علشان الذكاء يركز ويقراهم كلهم
+            const upper = availableItems.filter(i => i.cat === 'علوي' || i.cat === 'طبي');
+            const lower = availableItems.filter(i => i.cat === 'سفلي');
+            const shoes = availableItems.filter(i => i.cat === 'حذاء');
+            const accs = availableItems.filter(i => ['عطر', 'ساعة', 'إكسسوار'].includes(i.cat));
+
+            if(upper.length === 0 || lower.length === 0 || shoes.length === 0) {
+                return alert("الدولاب محتاج على الأقل (قطعة علوية، قطعة سفلية، وحذاء) نضاف علشان نقدر ننسق طقم! 🧺");
+            }
             
-            const occasion = prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل، فرح، ديت):");
+            const occasion = window.currentOccasion || prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل رسمي، خروجة كاجوال، جيم):");
             if(!occasion) return;
+            window.currentOccasion = occasion; // بنحفظ المناسبة علشان لو داس (هات طقم غيره) منسألوش تاني
 
-            showLoading("الستايلست بيقلب في الدولاب وينسق الطقم 👔...");
+            showLoading(rejectedIds.length > 0 ? "جاري فحص الـ 135 قطعة لاختيار طقم بديل ومختلف 🔄..." : "الستايلست بيفحص كل قطعة في دولابك بدقة 👔...");
             
-            // لأن الصور على فايربيز (روابط)، هنبعت روابط للذكاء؟ 
-            // جيميني (عن طريق API حالياً) محتاج Base64، هنحاول نبعت الوصف الدقيق اللي استخرجناه وقت الرفع.
-            const itemsDesc = availableItems.map((i, idx) => `[ID:${i.id}] القطعة: ${i.desc} (القسم: ${i.cat})`).join(' | ');
+            const formatCat = (items) => items.map(i => `[ID:${i.id}] ${i.desc||i.name}`).join(' | ');
             const wSet = appState.wardrobeSettings;
-            const profileTxt = `طول العميل: ${wSet.height}سم، الوزن: ${wSet.weight}كجم، الكتف: ${wSet.shoulder}سم، الخصر: ${wSet.waist}سم.`;
+            const profileTxt = `طول: ${wSet.height}سم، وزن: ${wSet.weight}كجم.`;
 
-            const promptText = `أنت ستايلست محترف. العميل خارج لـ: "${occasion}".
+            // إجبار الذكاء على قراءة كل الأقسام والتنويع والالتزام الصارم بالمناسبة
+            const promptText = `أنت ستايلست أزياء محترف ومبدع جداً. العميل خارج لـ: "${occasion}".
             بيانات جسم العميل: ${profileTxt}
-            هذه القطع المتاحة النظيفة في دولابه حالياً: ${itemsDesc}.
-            المطلوب: اختر طقم متناسق تماماً (علوي، سفلي، حذاء، وعطر أو ساعة إن وجد).
-            أرجع JSON فقط:
+            
+            أمامك خزانة ملابس ضخمة، يجب فحص *جميع* هذه القطع المتاحة في الأقسام التالية بدقة شديدة قبل الاختيار:
+            - ملابس علوية: ${formatCat(upper)}
+            - بناطيل/سفلي: ${formatCat(lower)}
+            - أحذية: ${formatCat(shoes)}
+            - إكسسوارات/عطور: ${formatCat(accs)}
+            
+            شروط هامة جداً (إجباري):
+            1. يجب اختيار طقم كامل متناسق يتكون من (قطعة علوية، قطعة سفلية، حذاء) كحد أدنى.
+            2. الطقم يجب أن يتوافق بنسبة 100% مع مناسبة "${occasion}" (الرسمي للرسمي، الرياضي للرياضي).
+            3. لا تستسهل! كن مبتكراً واختر أفضل مزيج من الألوان.
+            ${rejectedIds.length > 0 ? '4. لقد رفض العميل طقماً سابقاً، يجب أن تختار ستايل وألوان وقطع مختلفة تماماً وجذرياً هذه المرة.' : ''}
+            
+            أرجع JSON فقط بهذا التنسيق:
             {
-              "ids": ["ID القطعة 1", "ID القطعة 2"],
-              "styleName": "اسم الاستايل",
-              "reason": "شرح مفصل باللهجة المصرية ليه الألوان والقصات دي هتناسب جسمه والمناسبة دي"
+              "ids": ["ID القطعة العلوية", "ID القطعة السفلية", "ID الحذاء", ...],
+              "styleName": "اسم الاستايل المبتكر",
+              "reason": "شرح مفصل باللهجة المصرية ليه اخترت التنسيقة دي بالذات وازاي هتليق على جسمه وطبيعة خروجته"
             }`;
 
-            const res = await askAI(promptText, null, "json", "جاري تنسيق الألوان والموديلات...");
+            const res = await askAI(promptText, null, "json", "جاري تنسيق الطقم المثالي لك...");
             
-            if(res && res.ids) {
-                const selectedItems = res.ids.map(id => availableItems.find(i => i.id === id)).filter(Boolean);
+            if(res && res.ids && res.ids.length > 0) {
+                const selectedItems = res.ids.map(id => appState.wardrobe.find(i => i.id === id)).filter(Boolean);
+                window.lastCoordinatedOutfit = { items: selectedItems, reason: res.reason, style: res.styleName };
+
+                const shareText = `مرحباً، أنا أستخدم تطبيق عائلتي. الستايلست الذكي اقترح علي هذا الطقم لـ (${occasion}):\n${selectedItems.map(i=> "- " + (i.desc||i.name)).join('\n')}\nرأيه: ${res.reason}\n\nهل لديك اقتراح لتعديل الطقم؟`;
                 
-                // تجهيز النص علشان يتبعت لـ Gemini
-                const shareText = `مرحباً، أنا أستخدم تطبيق عائلتي. الستايلست الذكي اقترح علي هذا الطقم لـ (${occasion}):\n${selectedItems.map(i=> "- " + i.desc).join('\n')}\nرأيه: ${res.reason}\n\nبياناتي (طول ${wSet.height}، وزن ${wSet.weight}).\nهل لديك اقتراح لتعديل الطقم أو إضافة إكسسوارات؟`;
-                
+                // جمعنا الـ IDs بتاعت الطقم ده علشان لو معجبوش، نبعتها للذكاء يرفضها المرة الجاية
+                const currentOutfitIds = selectedItems.map(i => i.id).join(',');
+
                 const html = `
                     <div class="text-center" dir="rtl">
                         <h3 class="font-extrabold text-2xl text-indigo-700 mb-2">${res.styleName}</h3>
-                        <p class="text-slate-600 mb-6 leading-relaxed bg-indigo-50 p-4 rounded-xl border">${res.reason}</p>
+                        <p class="text-slate-600 mb-6 leading-relaxed bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">${res.reason}</p>
                         <div class="flex flex-wrap justify-center gap-4 mb-6">
                             ${selectedItems.map(item => `
-                                <div class="bg-white p-2 rounded-xl shadow-md border flex flex-col items-center w-28">
-                                    <span class="text-[10px] text-slate-400 font-bold mb-1">${item.cat}</span>
-                                    <img src="${item.img}" class="w-full h-24 object-cover rounded-lg border">
+                                <div class="bg-white p-2 rounded-xl shadow-md border border-slate-200 flex flex-col items-center w-28 transition hover:scale-105">
+                                    <span class="text-[10px] text-slate-500 font-bold mb-1">${item.cat}</span>
+                                    <img src="${item.img}" class="w-full h-24 object-cover rounded-lg border border-slate-100">
                                 </div>
                             `).join('')}
                         </div>
                         <div class="flex flex-col gap-2">
                             <button onclick="window.markOutfitWorn('${res.ids.join(',')}')" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow hover:bg-emerald-700 transition">هلبس الطقم ده (تسجيل في السجل ✅)</button>
-                            <button onclick="window.exportToGeminiChat(\`${encodeURIComponent(shareText)}\`)" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow hover:bg-slate-900 transition flex items-center justify-center gap-2"><i class="fas fa-magic"></i> إرسال الطقم لـ Gemini لأخذ رأيه</button>
+                            
+                            <!-- 🔄 الزرار الجديد: هيشغل نفس الدالة ويبعتلها القطع المرفوضة -->
+                            <button onclick="window.coordinateOutfitAI(['${currentOutfitIds}'])" class="w-full bg-amber-500 text-white py-3 rounded-xl font-bold shadow hover:bg-amber-600 transition flex items-center justify-center gap-2"><i class="fas fa-sync-alt"></i> الطقم مش عاجبني، هات طقم غيره</button>
+                            
+                            <button onclick="window.exportToGeminiChat(\`${encodeURIComponent(shareText)}\`)" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow hover:bg-slate-900 transition flex items-center justify-center gap-2"><i class="fas fa-robot"></i> إرسال الطقم لـ Gemini لأخذ رأيه</button>
                         </div>
                     </div>
                 `;
-                showModal("الطقم جاهز يا بطل! 🤵", html, [{text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full"}]);
+                
+                showModal("الطقم جاهز يا بطل! 🤵", html, [{text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full", onClick: () => { window.currentOccasion = null; }}]);
             } else {
-                alert("لم يتم التنسيق بنجاح، جرب مرة أخرى.");
+                alert("الستايلست مقدرش يقرر طقم مناسب.. جرب تعدل أسامي بعض القطع للتوضيح.");
+                window.currentOccasion = null;
             }
         };
 
-        // تسجيل الطقم إنه اتلبس
+        // دالة تسجيل الطقم (متعدلة لتنظيف المناسبة بعد اللبس)
         window.markOutfitWorn = function(idsStr) {
             const ids = idsStr.split(',');
             ids.forEach(id => {
                 const item = appState.wardrobe.find(i => i.id === id);
                 if(item) { item.state = 'worn'; item.lastWorn = new Date().toLocaleDateString('ar-EG'); }
             });
+            window.currentOccasion = null; // تنظيف الذاكرة
             saveState(); navigate('wardrobe');
             document.getElementById('custom-modal').classList.add('hidden');
-            alert("تم تسجيل الطقم في سجل اللبس بنجاح!");
+            alert("تم تسجيل الطقم في سجل اللبس بنجاح! شياكة يا دكتور 🔥");
         };
 
         // التصدير لـ Gemini
