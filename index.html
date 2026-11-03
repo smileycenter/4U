@@ -6691,8 +6691,7 @@ window.closeQuranPlayer = function() {
         // ==========================================
         window.selectedWardrobeItems = window.selectedWardrobeItems || [];
 
-        window.renderWardrobe = function(c) {
-            
+window.renderWardrobe = function(c) {
             window.selectedWardrobeItems = window.selectedWardrobeItems || [];
             if(!appState.wardrobe) appState.wardrobe = [];
             if(!appState.wardrobeSettings) appState.wardrobeSettings = { photo: '', waist: '', shoulder: '', height: '', weight: '', allowRepeat: false };
@@ -6712,34 +6711,34 @@ window.closeQuranPlayer = function() {
             const wornItems = appState.wardrobe.filter(i => i.state === 'worn');
             const wSet = appState.wardrobeSettings;
 
+            // 💡 ربط الذاكرة الصحيحة الخاصة بالمحادثات
             if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
             if(!appState.savedDeepChats.wardrobe) appState.savedDeepChats.wardrobe = [];
             const wChats = appState.savedDeepChats.wardrobe;
 
-// 💡 تجهيز خانة سجل محادثات الستايلست
-            let chatHistoryHTML = '';
-            if (appState.savedDeepChats && appState.savedDeepChats.wardrobe && appState.savedDeepChats.wardrobe.length > 0) {
-                chatHistoryHTML = `
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-6 mb-6 w-full max-w-5xl mx-auto" dir="rtl">
-                    <h3 class="font-bold text-lg text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-history text-indigo-500"></i> سجل محادثات الستايلست</h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                        ${appState.savedDeepChats.wardrobe.map(chat => `
+            // 💡 تجهيز خانة سجل محادثات الستايلست
+            let chatHistoryHTML = `
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-6 mb-6 w-full" dir="rtl">
+                <h3 class="font-bold text-lg text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-history text-indigo-500"></i> سجل محادثات الستايلست</h3>
+                ${wChats.length === 0 ? 
+                    '<p class="text-center text-sm text-slate-500 font-bold py-4">لا توجد محادثات محفوظة حالياً.</p>' : 
+                    `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                        ${wChats.map(chat => `
                             <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl flex justify-between items-center shadow-sm hover:border-indigo-300 transition">
                                 <div>
                                     <h4 class="font-bold text-sm text-slate-700 truncate max-w-[200px]">${chat.title || 'محادثة سابقة'}</h4>
                                     <span class="text-[10px] text-slate-500 mt-1">${chat.date || ''} | ${chat.messages ? chat.messages.length : 0} رسالة</span>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button onclick="window.openSmartChat('wardrobe', '${chat.title.replace(/'/g, "\\'")}', null, '${chat.id}')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200 transition"><i class="fas fa-eye"></i> استكمال</button>
+                                    <button onclick="window.openSmartChat('wardrobe', '${(chat.title || '').replace(/'/g, "\\'")}', null, '${chat.id}')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200 transition"><i class="fas fa-eye"></i> استكمال</button>
                                     <button onclick="window.delSmartChat('wardrobe', '${chat.id}')" class="bg-red-50 text-red-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
                         `).join('')}
-                    </div>
-                </div>
-                `;
-            }
-            
+                    </div>`
+                }
+            </div>
+            `;
 
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20 font-sans" dir="rtl">
@@ -6749,15 +6748,11 @@ window.closeQuranPlayer = function() {
                     </div>
 
                     <!-- شريط أدوات التحديد المتعدد العائم -->
-                                        <!-- شريط أدوات التحديد المتعدد العائم (محدث بزر الوصف الذكي وتصميم متوافق مع الموبايل) -->
-
-                   <div id="bulk-action-bar" class="hidden fixed left-1/2 transform -translate-x-1/2 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex-wrap justify-center items-center gap-2 transition-all w-[95%] max-w-lg flex" style="bottom: 120px; z-index: 9999;">
- 
+                    <div id="bulk-action-bar" class="hidden fixed left-1/2 transform -translate-x-1/2 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex-wrap justify-center items-center gap-2 transition-all w-[95%] max-w-lg flex" style="bottom: 120px; z-index: 9999;">
                         <div class="text-white font-bold px-3 py-1 border-b md:border-b-0 md:border-l border-slate-600 flex items-center justify-center w-full md:w-auto mb-1 md:mb-0">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
                         <div class="flex gap-2 w-full md:w-auto justify-center">
                             <button onclick="window.bulkAction('worn')" class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-indigo-600 transition flex-1"><i class="fas fa-check-double"></i> لبس</button>
                             <button onclick="window.bulkAction('dirty')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-orange-600 transition flex-1"><i class="fas fa-shopping-basket"></i> سلة</button>
-                            <!-- 🤖 الزر الجديد للوصف الذكي الجماعي -->
                             <button onclick="window.bulkAction('ai_desc')" class="bg-teal-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-teal-600 transition flex-1"><i class="fas fa-robot"></i> وصف ذكي</button>
                             <button onclick="window.bulkAction('delete')" class="bg-red-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-red-600 transition flex-1"><i class="fas fa-trash"></i> حذف</button>
                             <button onclick="window.clearWardrobeSelection()" class="bg-slate-600 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-slate-500 transition"><i class="fas fa-times"></i></button>
@@ -6848,7 +6843,6 @@ ${cat.items.map(item => {
                                                     <button onclick="event.stopPropagation(); window.editWardrobeItemDesc('${item.id}')" class="text-blue-600 hover:text-blue-800 text-[10px] bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded transition shadow-sm flex-shrink-0" title="تعديل الوصف يدوياً"><i class="fas fa-edit"></i></button>
                                                 </div>
                                                 
-                                                <!-- 🔴 التعديل السحري: 4 أزرار متوزعين في صفين لسهولة الاستخدام -->
                                                 <div class="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-slate-100">
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="لُبس اليوم">لبس</button>
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="للسلة">سلة</button>
@@ -6881,14 +6875,6 @@ ${cat.items.map(item => {
                             </div>
                         </div>
 
-
-<!-- 💡 إضافة السجل هنا ليظهر تحت سلة الغسيل -->
-                    <div class="w-full max-w-5xl mx-auto mb-8">
-                        ${chatHistoryHTML}
-                    </div>
-
-                        
-                        
                         <div class="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-sm">
                             <h3 class="font-bold text-slate-800 text-lg mb-4 border-b border-slate-300 pb-2"><i class="fas fa-history ml-1"></i> سجل القطع الملبوسة مؤخراً</h3>
                             <div class="flex flex-wrap gap-3 max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -6907,11 +6893,13 @@ ${cat.items.map(item => {
                             </div>
                         </div>
                     </div>
+
+                    <!-- 💡 تم إضافة السجل هنا في نهاية الصفحة ليكون تصميمه منفصلاً وأنيقاً 💡 -->
+                    ${chatHistoryHTML}
+                    
                 </div>
             `;
             setTimeout(window.updateBulkBarUI, 100);
-            
-            // ☁️ المزامنة التلقائية الصامتة مع السحابة عند فتح الصفحة
             setTimeout(window.autoRecoverWardrobeFromCloud, 500);
         };
         
@@ -7107,30 +7095,16 @@ ${cat.items.map(item => {
         };
 
 
-window.openStylistChat = function(encodedText) {
+// دالة مساعدة لفتح الشات الداخلي ونقل النص
+        window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
             
             // 1. إغلاق نافذة الطقم
             document.getElementById('custom-modal').classList.add('hidden'); 
             
-            // 2. إظهار نافذة المساعد الذكي العائمة
-            const chatWindow = document.getElementById('ai-chat-window');
-            if (chatWindow && chatWindow.classList.contains('hidden')) {
-                chatWindow.classList.remove('hidden');
-            }
-            
-            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
-            setTimeout(() => {
-                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
-                if(chatInput) {
-                    chatInput.value = text;
-                    chatInput.focus();
-                    // إرسال الرسالة تلقائياً
-                    if(typeof window.sendAIChat === 'function') {
-                        window.sendAIChat();
-                    }
-                }
-            }, 300);
+            // 2. فتح نافذة (شات الستايلست المخصص) وإرسال الطقم إليها مباشرة
+            // نستخدم دالة openSmartChat الموجودة لديك بالفعل لضمان الحفظ في الأرشيف
+            window.openSmartChat('wardrobe', 'نقاش حول الطقم المقترح', text);
         };
         
 
@@ -7212,30 +7186,16 @@ window.openStylistChat = function(encodedText) {
 
 
 
-window.openStylistChat = function(encodedText) {
+// دالة مساعدة لفتح الشات الداخلي ونقل النص
+        window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
             
             // 1. إغلاق نافذة الطقم
             document.getElementById('custom-modal').classList.add('hidden'); 
             
-            // 2. إظهار نافذة المساعد الذكي العائمة
-            const chatWindow = document.getElementById('ai-chat-window');
-            if (chatWindow && chatWindow.classList.contains('hidden')) {
-                chatWindow.classList.remove('hidden');
-            }
-            
-            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
-            setTimeout(() => {
-                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
-                if(chatInput) {
-                    chatInput.value = text;
-                    chatInput.focus();
-                    // إرسال الرسالة تلقائياً
-                    if(typeof window.sendAIChat === 'function') {
-                        window.sendAIChat();
-                    }
-                }
-            }, 300);
+            // 2. فتح نافذة (شات الستايلست المخصص) وإرسال الطقم إليها مباشرة
+            // نستخدم دالة openSmartChat الموجودة لديك بالفعل لضمان الحفظ في الأرشيف
+            window.openSmartChat('wardrobe', 'نقاش حول الطقم المقترح', text);
         };
 
         
@@ -7453,30 +7413,16 @@ window.openStylistChat = function(encodedText) {
         };
 
 
-window.openStylistChat = function(encodedText) {
+// دالة مساعدة لفتح الشات الداخلي ونقل النص
+        window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
             
             // 1. إغلاق نافذة الطقم
             document.getElementById('custom-modal').classList.add('hidden'); 
             
-            // 2. إظهار نافذة المساعد الذكي العائمة
-            const chatWindow = document.getElementById('ai-chat-window');
-            if (chatWindow && chatWindow.classList.contains('hidden')) {
-                chatWindow.classList.remove('hidden');
-            }
-            
-            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
-            setTimeout(() => {
-                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
-                if(chatInput) {
-                    chatInput.value = text;
-                    chatInput.focus();
-                    // إرسال الرسالة تلقائياً
-                    if(typeof window.sendAIChat === 'function') {
-                        window.sendAIChat();
-                    }
-                }
-            }, 300);
+            // 2. فتح نافذة (شات الستايلست المخصص) وإرسال الطقم إليها مباشرة
+            // نستخدم دالة openSmartChat الموجودة لديك بالفعل لضمان الحفظ في الأرشيف
+            window.openSmartChat('wardrobe', 'نقاش حول الطقم المقترح', text);
         };
         
 
