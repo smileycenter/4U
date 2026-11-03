@@ -5407,13 +5407,13 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
         // Utils
 
 // ==========================================
-        // 💬 محرك الشات الذكي الشامل (قابل للحفظ والاسترجاع - محدث للنوافذ الداخلية)
+        // 💬 محرك الشات الذكي الشامل (محدث بألوان قسم الستايلست)
         // ==========================================
         let currentSmartSession = { id: null, type: '', title: '', messages: [] };
 
         window.openSmartChat = async function(type, title, initialPrompt = null, existingChatId = null) {
             if(!appState.apiKeys.gemini) return showModal("تنبيه ⚠️", "<p class='text-center py-4 font-bold text-slate-700'>يرجى إدخال مفتاح Gemini في الإعدادات أولاً!</p>", [{text: "حسناً", class: "bg-slate-600 text-white"}]);
-            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [] };
+            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
             
             if (existingChatId) {
                 const chatObj = appState.savedDeepChats[type].find(c => c.id === existingChatId);
@@ -5422,31 +5422,38 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
                 currentSmartSession = { id: generateId(), type: type, title: title.substring(0, 40), messages: [], date: new Date().toLocaleString('ar-EG') };
             }
 
-            const icons = { quran: 'fa-book-quran', hadith: 'fa-scroll', shopping: 'fa-shopping-cart', assistant: 'fa-robot' };
-            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal' };
-            const color = colors[type];
+            // 💡 التعديل هنا: إضافة (wardrobe) لقاموس الأيقونات والألوان
+            const icons = { quran: 'fa-book-quran', hadith: 'fa-scroll', shopping: 'fa-shopping-cart', assistant: 'fa-robot', wardrobe: 'fa-tshirt' };
+            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal', wardrobe: 'indigo' };
+            
+            // لون وأيقونة افتراضية لتفادي الشاشة البيضاء
+            const color = colors[type] || 'indigo'; 
+            const icon = icons[type] || 'fa-comments';
 
             const html = `
                 <div class="flex flex-col h-[80vh] bg-slate-50 rounded-xl overflow-hidden" dir="rtl">
-                    <div class="bg-${color}-600 text-white p-4 font-bold flex flex-col md:flex-row justify-between items-center shadow-md gap-3">
-                        <span class="flex items-center gap-2 truncate"><i class="fas ${icons[type]} text-2xl"></i> ${currentSmartSession.title}</span>
-                        <div class="flex gap-2">
-                            <button onclick="window.saveSmartChatSession()" class="bg-white text-${color}-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-100 transition"><i class="fas fa-save"></i> حفظ المحادثة</button>
-                            <button onclick="window.viewChatHistory('${type}')" class="bg-${color}-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-${color}-900 transition"><i class="fas fa-history"></i> السجل</button>
+                    <div class="bg-${color}-700 text-white p-4 font-bold flex flex-col md:flex-row justify-between items-center shadow-md gap-3">
+                        <span class="flex items-center gap-2 truncate"><i class="fas ${icon} text-2xl text-${color}-200"></i> ${currentSmartSession.title}</span>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <!-- الأزرار العلوية بقت ملونة وثابتة -->
+                            <button onclick="window.saveSmartChatSession()" class="flex-1 md:flex-none bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 border border-emerald-400"><i class="fas fa-save"></i> حفظ المحادثة</button>
+                            <button onclick="window.viewChatHistory('${type}')" class="flex-1 md:flex-none bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 border border-slate-700"><i class="fas fa-history text-slate-300"></i> السجل</button>
                         </div>
                     </div>
-                    <div id="smart-chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100">
-                    </div>
-                    <div class="p-3 bg-white border-t flex gap-2 items-center">
-                        <input type="text" id="smart-chat-input" placeholder="اكتب رسالتك هنا..." class="flex-1 border-2 border-${color}-200 p-3 rounded-xl outline-none focus:border-${color}-500" onkeypress="if(event.key==='Enter') window.sendSmartChatMsg()">
-                        <button onclick="window.sendSmartChatMsg()" class="bg-${color}-600 hover:bg-${color}-700 text-white w-12 h-12 rounded-xl font-bold transition flex justify-center items-center"><i class="fas fa-paper-plane"></i></button>
+                    
+                    <div id="smart-chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100 custom-scrollbar"></div>
+                    
+                    <div class="p-3 bg-white border-t border-slate-300 flex gap-3 items-center shadow-inner">
+                        <input type="text" id="smart-chat-input" placeholder="اكتب رسالتك هنا..." class="flex-1 border-2 border-slate-300 p-3 rounded-xl outline-none focus:border-${color}-500 font-bold text-slate-800 shadow-sm" onkeypress="if(event.key==='Enter') window.sendSmartChatMsg()">
+                        <!-- زر الإرسال أخد لون القسم -->
+                        <button onclick="window.sendSmartChatMsg()" class="bg-${color}-600 hover:bg-${color}-700 text-white w-14 h-12 rounded-xl font-bold transition flex justify-center items-center shadow-md shrink-0"><i class="fas fa-paper-plane text-lg"></i></button>
                     </div>
                 </div>
             `;
             openFSModal(`محادثة: ${title}`, html);
 
             if (!existingChatId && initialPrompt) {
-                document.getElementById('smart-chat-box').innerHTML = `<div class="text-center text-${color}-500 font-bold py-10"><i class="fas fa-spinner fa-spin text-3xl mb-2 block"></i> جاري إعداد الرد الأول...</div>`;
+                document.getElementById('smart-chat-box').innerHTML = `<div class="text-center text-${color}-600 font-bold py-10"><i class="fas fa-spinner fa-spin text-4xl mb-3 block"></i> جاري إعداد الرد الأول...</div>`;
                 const res = await askAI(initialPrompt, null, "text", "جاري التحليل...");
                 document.getElementById('smart-chat-box').innerHTML = '';
                 if(res) { window.appendSmartChatMsg('ai', res, color); }
@@ -5466,7 +5473,7 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
                 <div class="flex ${isAI ? 'justify-start' : 'justify-end'} fade-in">
                     <div class="max-w-[90%] p-4 rounded-2xl ${isAI ? `bg-white border border-${color}-200 shadow-md text-slate-800 rounded-tr-none` : `bg-${color}-100 text-${color}-900 shadow-sm rounded-tl-none border border-${color}-200`}">
                         <div class="text-xs font-bold mb-2 ${isAI ? `text-${color}-600` : 'text-slate-500'}">${isAI ? '<i class="fas fa-robot"></i> المساعد' : '<i class="fas fa-user"></i> أنت'}</div>
-                        <div class="prose max-w-none text-sm md:text-base leading-loose whitespace-pre-wrap">${text.replace(/\\n/g, '<br>')}</div>
+                        <div class="prose max-w-none text-sm md:text-base leading-loose whitespace-pre-wrap">${text.replace(/\n/g, '<br>')}</div>
                     </div>
                 </div>
             `;
@@ -5476,18 +5483,21 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
         window.sendSmartChatMsg = async function() {
             const inp = document.getElementById('smart-chat-input');
             const msg = inp.value.trim(); if(!msg) return;
-            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal' };
-            const color = colors[currentSmartSession.type];
+            
+            // 💡 التعديل هنا: إضافة (wardrobe) لقاموس الألوان علشان فقاعات الشات تاخد لون
+            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal', wardrobe: 'indigo' };
+            const color = colors[currentSmartSession.type] || 'indigo';
             
             window.appendSmartChatMsg('user', msg, color); inp.value = '';
             
-            let context = currentSmartSession.messages.map(m => (m.sender==='ai'?'المساعد: ':'المستخدم: ') + m.text).join('\\n');
-            const res = await askAI(`بناء على هذا الحوار:\\n${context}\\n\\nأجب على استفسار المستخدم الأخير بدقة.`, null, "text", "جاري التفكير...");
+            let context = currentSmartSession.messages.map(m => (m.sender==='ai'?'المساعد: ':'المستخدم: ') + m.text).join('\n');
+            const res = await askAI(`بناء على هذا الحوار:\n${context}\n\nأجب على استفسار المستخدم الأخير بدقة.`, null, "text", "جاري التفكير...");
             if(res) window.appendSmartChatMsg('ai', res, color);
         };
 
         window.saveSmartChatSession = function() {
-            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [] };
+            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
+            if(!appState.savedDeepChats[currentSmartSession.type]) appState.savedDeepChats[currentSmartSession.type] = [];
             
             const index = appState.savedDeepChats[currentSmartSession.type].findIndex(c => c.id === currentSmartSession.id);
             if(index > -1) appState.savedDeepChats[currentSmartSession.type][index] = currentSmartSession;
@@ -5495,24 +5505,37 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
             
             saveState(); 
             showModal("تم الحفظ بنجاح 💾", "<p class='text-center font-bold text-slate-700 py-4'>تم حفظ المحادثة في السجل بنجاح! يمكنك العودة إليها لاحقاً.</p>", [{text: "علم", class: "bg-teal-600 text-white"}]);
+            
+            const cArea = document.getElementById('content-area');
+            if(cArea && cArea.innerHTML.includes('الستايلست الذكي') && currentSmartSession.type === 'wardrobe') {
+                navigate('wardrobe');
+            } else if (cArea && currentSmartSession.type === 'shopping') {
+                navigate('shopping');
+            } else if (cArea && currentSmartSession.type === 'quran') {
+                navigate('quran');
+            } else if (cArea && currentSmartSession.type === 'hadith') {
+                navigate('hadith');
+            }
         };
 
         window.viewChatHistory = function(type) {
             if(!appState.savedDeepChats || !appState.savedDeepChats[type] || appState.savedDeepChats[type].length === 0) return showModal("السجل فارغ 📭", "<p class='text-center py-4 font-bold text-slate-700'>لا يوجد سجل محادثات محفوظ في هذا القسم.</p>", [{text: "حسناً", class: "bg-slate-600 text-white"}]);
-            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal' };
-            const color = colors[type];
+            
+            // 💡 التعديل هنا لظهور السجل بألوان صحيحة
+            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal', wardrobe: 'indigo' };
+            const color = colors[type] || 'indigo';
             
             const html = `
                 <div class="space-y-3 p-4 bg-slate-50 min-h-full" dir="rtl">
                     ${appState.savedDeepChats[type].map(c => `
-                        <div class="bg-white p-4 rounded-xl border border-${color}-200 shadow-sm flex justify-between items-center">
+                        <div class="bg-white p-4 rounded-xl border border-${color}-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                             <div>
                                 <h4 class="font-bold text-${color}-800 truncate max-w-[200px] md:max-w-md">${c.title}</h4>
-                                <p class="text-xs text-slate-500 mt-1">${c.date} \vert{}${c.messages.length} رسالة</p>
+                                <p class="text-xs text-slate-500 mt-1">${c.date} | ${c.messages.length} رسالة</p>
                             </div>
-                            <div class="flex gap-2">
-                                <button onclick="window.openSmartChat('${type}', '${c.title.replace(/'/g, "\\'")}', null, '${c.id}')" class="bg-${color}-100 text-${color}-700 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-${color}-200 transition"><i class="fas fa-comment-dots"></i> استكمال</button>
-                                <button onclick="window.delSmartChat('${type}', '${c.id}')" class="bg-red-50 text-red-500 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <button onclick="window.openSmartChat('${type}', '${c.title.replace(/'/g, "\\'")}', null, '${c.id}')" class="flex-1 md:flex-none bg-${color}-100 text-${color}-700 px-4 py-2 rounded-lg font-bold text-xs hover:bg-${color}-200 transition shadow-sm"><i class="fas fa-comment-dots"></i> استكمال</button>
+                                <button onclick="window.delSmartChat('${type}', '${c.id}')" class="bg-red-50 text-red-500 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-100 transition shadow-sm"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                     `).join('')}
@@ -5528,9 +5551,10 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
                     appState.savedDeepChats[type] = appState.savedDeepChats[type].filter(c => c.id !== id);
                     saveState(); 
                     window.viewChatHistory(type); 
+                    if(type === 'wardrobe') navigate('wardrobe');
                 }}
             ]);
-        };  
+        }; 
 
 
       
