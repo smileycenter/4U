@@ -6496,6 +6496,7 @@ window.closeQuranPlayer = function() {
 
 
         // 5. دالة الوصف الذكي للقطعة المفردة 🤖 (نسخة الاتصال المباشر الصاروخي)
+                // 5. دالة الوصف الذكي للقطعة المفردة 🤖 (نسخة الاتصال المباشر الصاروخي)
         window.generateSingleItemAIDesc = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if (!item || !item.img) return;
@@ -6543,6 +6544,7 @@ window.closeQuranPlayer = function() {
                 showModal("تنبيه 🔔", "<p class='text-center font-bold p-4'>حدث خطأ أثناء جلب الصورة.<br><br><span class='text-sm text-slate-500'>إذا استمر هذا الخطأ، تأكد من تنفيذ أمر الـ CORS في Google Cloud Shell كما هو موضح.</span></p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
             }
         };
+
 
 
 
