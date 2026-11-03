@@ -6495,30 +6495,28 @@ window.closeQuranPlayer = function() {
 
 
 
-// 5. دالة الوصف الذكي للقطعة المفردة 🤖 (محدثة لمنع أخطاء التنسيق)
+        // 5. دالة الوصف الذكي للقطعة المفردة 🤖 (نسخة الاتصال المباشر الصاروخي)
         window.generateSingleItemAIDesc = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if (!item || !item.img) return;
 
             showLoading("الستايلست بيحلل صورة القطعة 🤖...");
             try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(item.img)}`;
-                const res = await fetch(proxyUrl);
+                // 💡 الاتصال المباشر بسيرفراتك بعد تفعيل الـ CORS بدون أي وسيط
+                const res = await fetch(item.img);
                 
-                if (!res.ok) throw new Error("فشل جلب الصورة عبر الوسيط");
+                if (!res.ok) throw new Error("فشل جلب الصورة");
                 
                 const blob = await res.blob();
                 const base64Data = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         const result = reader.result;
-                        // استخراج شفرة الصورة الصافية فقط
                         resolve(result.includes(',') ? result.split(',')[1] : result);
                     };
                     reader.readAsDataURL(blob);
                 });
 
-                // 💡 إجبار المتصفح على تصنيف الملف كصورة لمنع رفض الذكاء الاصطناعي له
                 let mime = blob.type;
                 if (!mime || mime === 'application/octet-stream') mime = 'image/jpeg';
 
@@ -6542,9 +6540,10 @@ window.closeQuranPlayer = function() {
             } catch (e) {
                 console.error("خطأ أثناء تحليل الصورة:", e);
                 hideLoading();
-                alert("حدث خطأ أثناء جلب الصورة لتحليلها. تأكد من جودة الإنترنت.");
+                showModal("تنبيه 🔔", "<p class='text-center font-bold p-4'>حدث خطأ أثناء جلب الصورة.<br><br><span class='text-sm text-slate-500'>إذا استمر هذا الخطأ، تأكد من تنفيذ أمر الـ CORS في Google Cloud Shell كما هو موضح.</span></p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
             }
         };
+
 
 
         
