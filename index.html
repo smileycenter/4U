@@ -510,7 +510,7 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
         // Core AI Logic
   
 // Core AI Logic - مطورة لتدعم أكثر من صورة معاً
-        async function askAI(prompt, filesData = null, responseType = "text", loaderMsg = "جاري المعالجة...", mimeType = "image/jpeg") {
+async function askAI(prompt, filesData = null, responseType = "text", loaderMsg = "جاري المعالجة...", defaultMimeType = "image/jpeg") {
             const key = appState.apiKeys.gemini || "";
             if(!key) { alert("يرجى وضع مفتاح Gemini API في الإعدادات"); return null; }
             showLoading(loaderMsg);
@@ -518,12 +518,16 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
                 let parts = [{ text: prompt }];
                 
                 if (filesData && Array.isArray(filesData)) {
-                    filesData.forEach(file => { parts.push({ inlineData: { mimeType: file.mimeType || "image/jpeg", data: file.data } }); });
+                    filesData.forEach(file => { 
+                        parts.push({ inlineData: { mimeType: file.mimeType || defaultMimeType, data: file.data } }); 
+                    });
                 } else if (filesData) {
-                    parts.push({ inlineData: { mimeType: mimeType, data: filesData } });
+                    // 💡 التصحيح هنا: استخراج النص الصافي (Base64) ونوع الملف بشكل سليم لمنع خطأ 400
+                    let base64String = filesData.data ? filesData.data : filesData;
+                    let actualMime = filesData.mimeType ? filesData.mimeType : defaultMimeType;
+                    parts.push({ inlineData: { mimeType: actualMime, data: base64String } });
                 }
 
-                // إضافة فلاتر الأمان لمنع حظر بعض مصطلحات الملابس
                 const payload = { 
                     contents: [{ parts: parts }], 
                     generationConfig: {},
@@ -537,33 +541,29 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
                 
                 if (responseType === "json") payload.generationConfig.responseMimeType = "application/json";
 
-                // الموديل الخاص بك كما طلبت تماماً
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`;
                 const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 
-                if(!res.ok) throw new Error("API Error");
+                if(!res.ok) throw new Error("API Error: " + res.status);
                 const data = await res.json();
                 hideLoading();
                 
                 const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                 if(!text) return null;
 
-                // استخراج الـ JSON بذكاء حتى لو الذكاء الاصطناعي أرسل نصوص إضافية بالخطأ
                 if (responseType === "json") {
                     try {
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         const cleanText = jsonMatch ? jsonMatch[0] : text.replace(/```json/g,'').replace(/```/g,'').trim();
                         return JSON.parse(cleanText);
                     } catch(parseErr) {
-                        console.error("خطأ في قراءة الـ JSON:", parseErr);
                         return null;
                     }
                 }
                 return text;
             } catch (error) {
                 hideLoading(); 
-                alert("حدث خطأ في الاتصال بالذكاء الاصطناعي. تأكد من حجم الملفات أو الاتصال."); 
-                console.error(error);
+                console.error("askAI Error:", error);
                 return null;
             }
         }
@@ -6495,14 +6495,13 @@ window.closeQuranPlayer = function() {
 
 
 
-// 5. دالة الوصف الذكي للقطعة المفردة 🤖 (محدثة لتخطي حظر CORS)
+// 5. دالة الوصف الذكي للقطعة المفردة 🤖 (محدثة لمنع أخطاء التنسيق)
         window.generateSingleItemAIDesc = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if (!item || !item.img) return;
 
             showLoading("الستايلست بيحلل صورة القطعة 🤖...");
             try {
-                // 💡 الحل السحري: استخدام وسيط (Proxy) لتخطي حظر المتصفح وقراءة الصورة بنجاح
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(item.img)}`;
                 const res = await fetch(proxyUrl);
                 
@@ -6511,16 +6510,24 @@ window.closeQuranPlayer = function() {
                 const blob = await res.blob();
                 const base64Data = await new Promise((resolve) => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onloadend = () => {
+                        const result = reader.result;
+                        // استخراج شفرة الصورة الصافية فقط
+                        resolve(result.includes(',') ? result.split(',')[1] : result);
+                    };
                     reader.readAsDataURL(blob);
                 });
+
+                // 💡 إجبار المتصفح على تصنيف الملف كصورة لمنع رفض الذكاء الاصطناعي له
+                let mime = blob.type;
+                if (!mime || mime === 'application/octet-stream') mime = 'image/jpeg';
 
                 let promptStr = `أنت خبير أزياء. اكتب وصفاً دقيقاً ومختصراً جداً لهذه القطعة في (3 إلى 5 كلمات كحد أقصى). اذكر اللون والنوع فقط. مثال: 'قميص أبيض سادة' أو 'بنطلون جينز كحلي'. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
                 
                 if (item.cat === 'عطر') promptStr = `ما اسم ماركة هذا العطر؟ (كلمتين فقط). أرجع JSON فقط: {"desc": "اسم العطر"}`;
                 if (item.cat === 'ساعة' || item.cat === 'إكسسوار') promptStr = `صف هذه القطعة في 3 كلمات فقط (اللون والنوع). أرجع JSON فقط: {"desc": "الوصف هنا"}`;
 
-                const aiRes = await askAI(promptStr, {mimeType: blob.type || "image/jpeg", data: base64Data}, "json", "جاري كتابة الوصف الدقيق...");
+                const aiRes = await askAI(promptStr, {mimeType: mime, data: base64Data}, "json", "جاري كتابة الوصف الدقيق...");
                 
                 if (aiRes && aiRes.desc) {
                     item.desc = aiRes.desc;
@@ -6530,15 +6537,14 @@ window.closeQuranPlayer = function() {
                     hideLoading();
                 } else {
                     hideLoading();
-                    alert("لم يتمكن الذكاء الاصطناعي من تحليل الصورة، حاول مرة أخرى أو اكتب الوصف يدوياً.");
+                    showModal("رسالة من النظام 🔔", "<p class='text-center font-bold p-4'>لم يتمكن الذكاء الاصطناعي من تحليل الصورة، حاول مرة أخرى أو اكتب الوصف يدوياً.</p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
                 }
             } catch (e) {
                 console.error("خطأ أثناء تحليل الصورة:", e);
                 hideLoading();
-                alert("حدث خطأ أثناء جلب الصورة لتحليلها. قد يكون الفايربيز يمنع الوصول، جرب مرة أخرى.");
+                alert("حدث خطأ أثناء جلب الصورة لتحليلها. تأكد من جودة الإنترنت.");
             }
         };
-
 
 
         
