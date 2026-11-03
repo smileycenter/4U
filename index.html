@@ -6718,15 +6718,21 @@ window.closeQuranPlayer = function() {
 
 // 💡 تجهيز خانة سجل محادثات الستايلست
             let chatHistoryHTML = '';
-            if (appState.chatHistory && appState.chatHistory.length > 0) {
+            if (appState.savedDeepChats && appState.savedDeepChats.wardrobe && appState.savedDeepChats.wardrobe.length > 0) {
                 chatHistoryHTML = `
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-6 mb-6 w-full" dir="rtl">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-6 mb-6 w-full max-w-5xl mx-auto" dir="rtl">
                     <h3 class="font-bold text-lg text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-history text-indigo-500"></i> سجل محادثات الستايلست</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                        ${appState.chatHistory.map((chat, index) => `
-                            <div onclick="window.loadSavedChat(${index})" class="bg-slate-50 border border-slate-100 p-3 rounded-xl flex justify-between items-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition shadow-sm">
-                                <span class="font-bold text-sm text-slate-700 truncate flex-1">${chat.title || 'محادثة سابقة'}</span>
-                                <span class="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-200 mr-2">${chat.date || ''}</span>
+                        ${appState.savedDeepChats.wardrobe.map(chat => `
+                            <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl flex justify-between items-center shadow-sm hover:border-indigo-300 transition">
+                                <div>
+                                    <h4 class="font-bold text-sm text-slate-700 truncate max-w-[200px]">${chat.title || 'محادثة سابقة'}</h4>
+                                    <span class="text-[10px] text-slate-500 mt-1">${chat.date || ''} | ${chat.messages ? chat.messages.length : 0} رسالة</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="window.openSmartChat('wardrobe', '${chat.title.replace(/'/g, "\\'")}', null, '${chat.id}')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200 transition"><i class="fas fa-eye"></i> استكمال</button>
+                                    <button onclick="window.delSmartChat('wardrobe', '${chat.id}')" class="bg-red-50 text-red-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -7101,18 +7107,28 @@ ${cat.items.map(item => {
         };
 
 
-// دالة مساعدة لفتح الشات الداخلي ونقل النص
-        window.openStylistChat = function(encodedText) {
+window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
+            
+            // 1. إغلاق نافذة الطقم
             document.getElementById('custom-modal').classList.add('hidden'); 
             
-            if(typeof navigate === 'function') navigate('chat'); 
+            // 2. إظهار نافذة المساعد الذكي العائمة
+            const chatWindow = document.getElementById('ai-chat-window');
+            if (chatWindow && chatWindow.classList.contains('hidden')) {
+                chatWindow.classList.remove('hidden');
+            }
             
+            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
             setTimeout(() => {
-                const chatInput = document.querySelector('input[placeholder="اكتب رسالتك هنا..."]');
+                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
                 if(chatInput) {
                     chatInput.value = text;
                     chatInput.focus();
+                    // إرسال الرسالة تلقائياً
+                    if(typeof window.sendAIChat === 'function') {
+                        window.sendAIChat();
+                    }
                 }
             }, 300);
         };
@@ -7198,19 +7214,29 @@ ${cat.items.map(item => {
 
 window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
-            document.getElementById('custom-modal').classList.add('hidden'); // إغلاق النافذة
             
-            if(typeof navigate === 'function') navigate('chat'); // استبدل 'chat' باسم تبويب المحادثة عندك إذا كان مختلفاً
+            // 1. إغلاق نافذة الطقم
+            document.getElementById('custom-modal').classList.add('hidden'); 
             
+            // 2. إظهار نافذة المساعد الذكي العائمة
+            const chatWindow = document.getElementById('ai-chat-window');
+            if (chatWindow && chatWindow.classList.contains('hidden')) {
+                chatWindow.classList.remove('hidden');
+            }
+            
+            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
             setTimeout(() => {
-                const chatInput = document.querySelector('input[placeholder="اكتب رسالتك هنا..."]');
+                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
                 if(chatInput) {
                     chatInput.value = text;
                     chatInput.focus();
+                    // إرسال الرسالة تلقائياً
+                    if(typeof window.sendAIChat === 'function') {
+                        window.sendAIChat();
+                    }
                 }
             }, 300);
         };
-
 
         
         
@@ -7427,18 +7453,28 @@ window.openStylistChat = function(encodedText) {
         };
 
 
-// دالة مساعدة لفتح الشات الداخلي ونقل النص
-        window.openStylistChat = function(encodedText) {
+window.openStylistChat = function(encodedText) {
             const text = decodeURIComponent(encodedText);
+            
+            // 1. إغلاق نافذة الطقم
             document.getElementById('custom-modal').classList.add('hidden'); 
             
-            if(typeof navigate === 'function') navigate('chat'); 
+            // 2. إظهار نافذة المساعد الذكي العائمة
+            const chatWindow = document.getElementById('ai-chat-window');
+            if (chatWindow && chatWindow.classList.contains('hidden')) {
+                chatWindow.classList.remove('hidden');
+            }
             
+            // 3. كتابة النص في مربع الشات وإرساله تلقائياً
             setTimeout(() => {
-                const chatInput = document.querySelector('input[placeholder="اكتب رسالتك هنا..."]');
+                const chatInput = document.getElementById('ai-input'); // استخدام المعرف الصحيح للمربع
                 if(chatInput) {
                     chatInput.value = text;
                     chatInput.focus();
+                    // إرسال الرسالة تلقائياً
+                    if(typeof window.sendAIChat === 'function') {
+                        window.sendAIChat();
+                    }
                 }
             }, 300);
         };
