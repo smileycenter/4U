@@ -6897,76 +6897,88 @@ ${cat.items.map(item => {
         };
 
 // ==========================================
-        // 5. التنسيق الذكي المتطور (مع الإجبار على التنويع وزر الرفض)
+        // 5. التنسيق الذكي (مع ذاكرة تراكمية للمرفوضات)
         // ==========================================
         window.lastCoordinatedOutfit = null;
+        window.currentOccasion = null;
+        window.accumulatedRejectedIds = []; // 💡 الذاكرة الجديدة للقطع المرفوضة
         
-        window.coordinateOutfitAI = async function(rejectedIds = []) {
+        window.coordinateOutfitAI = async function(rejectedIdsStr = "") {
+            // لو مفيش قطع مبعوتة تترفض (يعني طلب جديد)، نصفر الذاكرة
+            if (!rejectedIdsStr) {
+                window.accumulatedRejectedIds = [];
+            } else {
+                // لو فيه قطع مرفوضة، نفككها ونضيفها للذاكرة التراكمية
+                const newRejected = rejectedIdsStr.split(',');
+                window.accumulatedRejectedIds = [...new Set([...window.accumulatedRejectedIds, ...newRejected])];
+            }
+
             const cleanItems = appState.wardrobe.filter(i => i.state === 'clean');
             let availableItems = cleanItems;
             
-            // استبعاد الملابس اللي اتلبست لو التكرار مقفول
             if(!appState.wardrobeSettings.allowRepeat) {
                 availableItems = cleanItems.filter(i => i.state !== 'worn');
             }
 
-            // استبعاد الملابس اللي إنت لسه رافضها في الطقم اللي قبله
-            if(rejectedIds.length > 0) {
-                availableItems = availableItems.filter(i => !rejectedIds.includes(i.id));
+            // 💡 الإخفاء الإجباري: استبعاد كل القطع اللي في ذاكرة المرفوضات من الاختيارات
+            if(window.accumulatedRejectedIds.length > 0) {
+                availableItems = availableItems.filter(i => !window.accumulatedRejectedIds.includes(i.id));
             }
 
-            // تقسيم الملابس لأقسام علشان الذكاء يركز ويقراهم كلهم
-            const upper = availableItems.filter(i => i.cat === 'علوي' || i.cat === 'طبي');
-            const lower = availableItems.filter(i => i.cat === 'سفلي');
-            const shoes = availableItems.filter(i => i.cat === 'حذاء');
-            const accs = availableItems.filter(i => ['عطر', 'ساعة', 'إكسسوار'].includes(i.cat));
+            // خوارزمية الخلط (Shuffle) لضمان التنوع
+            const shuffleArray = (array) => {
+                let shuffled = [...array];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            };
+
+            const upper = shuffleArray(availableItems.filter(i => i.cat === 'علوي' || i.cat === 'طبي'));
+            const lower = shuffleArray(availableItems.filter(i => i.cat === 'سفلي'));
+            const shoes = shuffleArray(availableItems.filter(i => i.cat === 'حذاء'));
 
             if(upper.length === 0 || lower.length === 0 || shoes.length === 0) {
-                return alert("الدولاب محتاج على الأقل (قطعة علوية، قطعة سفلية، وحذاء) نضاف علشان نقدر ننسق طقم! 🧺");
+                return alert("الدولاب محتاج على الأقل (قطعة علوية، قطعة سفلية، وحذاء) نضاف ومختلفين عن الأطقم اللي رفضتها!");
             }
             
             const occasion = window.currentOccasion || prompt("إيه المناسبة أو المشوار اللي خارج فيه؟ (مثال: شغل رسمي، خروجة كاجوال، جيم):");
             if(!occasion) return;
-            window.currentOccasion = occasion; // بنحفظ المناسبة علشان لو داس (هات طقم غيره) منسألوش تاني
+            window.currentOccasion = occasion; 
 
-            showLoading(rejectedIds.length > 0 ? "جاري فحص الـ 135 قطعة لاختيار طقم بديل ومختلف 🔄..." : "الستايلست بيفحص كل قطعة في دولابك بدقة 👔...");
+            showLoading(window.accumulatedRejectedIds.length > 0 ? "جاري استبعاد الأطقم المرفوضة وتنسيق طقم جديد تماماً 🔄..." : "الستايلست بيفرز كل قطعة في دولابك 👔...");
             
-            const formatCat = (items) => items.map(i => `[ID:${i.id}] ${i.desc||i.name}`).join(' | ');
+            const formatCat = (items) => items.map(i => `[ID:${i.id}] وصف: ${i.desc||i.name}`).join(' | ');
             const wSet = appState.wardrobeSettings;
             const profileTxt = `طول: ${wSet.height}سم، وزن: ${wSet.weight}كجم.`;
 
-            // إجبار الذكاء على قراءة كل الأقسام والتنويع والالتزام الصارم بالمناسبة
-            const promptText = `أنت ستايلست أزياء محترف ومبدع جداً. العميل خارج لـ: "${occasion}".
-            بيانات جسم العميل: ${profileTxt}
+            const promptText = `أنت ستايلست أزياء محترف. العميل خارج لمناسبة: "${occasion}".
+            بيانات الجسم: ${profileTxt}
             
-            أمامك خزانة ملابس ضخمة، يجب فحص *جميع* هذه القطع المتاحة في الأقسام التالية بدقة شديدة قبل الاختيار:
-            - ملابس علوية: ${formatCat(upper)}
-            - بناطيل/سفلي: ${formatCat(lower)}
+            الملابس المتاحة (اعتمد كلياً على "الوصف" لمعرفة نوع ولون القطعة):
+            - علوي: ${formatCat(upper)}
+            - سفلي: ${formatCat(lower)}
             - أحذية: ${formatCat(shoes)}
-            - إكسسوارات/عطور: ${formatCat(accs)}
             
-            شروط هامة جداً (إجباري):
-            1. يجب اختيار طقم كامل متناسق يتكون من (قطعة علوية، قطعة سفلية، حذاء) كحد أدنى.
-            2. الطقم يجب أن يتوافق بنسبة 100% مع مناسبة "${occasion}" (الرسمي للرسمي، الرياضي للرياضي).
-            3. لا تستسهل! كن مبتكراً واختر أفضل مزيج من الألوان.
-            ${rejectedIds.length > 0 ? '4. لقد رفض العميل طقماً سابقاً، يجب أن تختار ستايل وألوان وقطع مختلفة تماماً وجذرياً هذه المرة.' : ''}
+            قواعد صارمة:
+            1. يجب اختيار (قطعة علوية، قطعة سفلية، حذاء) متوافقين 100% مع المناسبة (رياضي للرياضة، رسمي للرسمي).
+            2. استخدم الوصف بدقة لضمان تناسق الألوان والموديلات.
             
             أرجع JSON فقط بهذا التنسيق:
             {
-              "ids": ["ID القطعة العلوية", "ID القطعة السفلية", "ID الحذاء", ...],
-              "styleName": "اسم الاستايل المبتكر",
-              "reason": "شرح مفصل باللهجة المصرية ليه اخترت التنسيقة دي بالذات وازاي هتليق على جسمه وطبيعة خروجته"
+              "ids": ["ID القطعة العلوية", "ID القطعة السفلية", "ID الحذاء"],
+              "styleName": "اسم الاستايل",
+              "reason": "شرح بناءً على الوصف ليه القطع دي متوافقة مع المناسبة"
             }`;
 
-            const res = await askAI(promptText, null, "json", "جاري تنسيق الطقم المثالي لك...");
+            const res = await askAI(promptText, null, "json", "جاري اختيار القطع...");
             
             if(res && res.ids && res.ids.length > 0) {
                 const selectedItems = res.ids.map(id => appState.wardrobe.find(i => i.id === id)).filter(Boolean);
                 window.lastCoordinatedOutfit = { items: selectedItems, reason: res.reason, style: res.styleName };
 
-                const shareText = `مرحباً، أنا أستخدم تطبيق عائلتي. الستايلست الذكي اقترح علي هذا الطقم لـ (${occasion}):\n${selectedItems.map(i=> "- " + (i.desc||i.name)).join('\n')}\nرأيه: ${res.reason}\n\nهل لديك اقتراح لتعديل الطقم؟`;
-                
-                // جمعنا الـ IDs بتاعت الطقم ده علشان لو معجبوش، نبعتها للذكاء يرفضها المرة الجاية
+                // 💡 التعديل هنا: تحويل الـ IDs لنص سليم عشان الزرار يقرأها صح
                 const currentOutfitIds = selectedItems.map(i => i.id).join(',');
 
                 const html = `
@@ -6982,31 +6994,38 @@ ${cat.items.map(item => {
                             `).join('')}
                         </div>
                         <div class="flex flex-col gap-2">
-                            <button onclick="window.markOutfitWorn('${res.ids.join(',')}')" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow hover:bg-emerald-700 transition">هلبس الطقم ده (تسجيل في السجل ✅)</button>
+                            <button onclick="window.markOutfitWorn('${res.ids.join(',')}')" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow hover:bg-emerald-700 transition flex items-center justify-center gap-2"><i class="fas fa-check-circle"></i> هلبس الطقم ده (تسجيل في السجل)</button>
                             
-                            <!-- 🔄 الزرار الجديد: هيشغل نفس الدالة ويبعتلها القطع المرفوضة -->
-                            <button onclick="window.coordinateOutfitAI(['${currentOutfitIds}'])" class="w-full bg-amber-500 text-white py-3 rounded-xl font-bold shadow hover:bg-amber-600 transition flex items-center justify-center gap-2"><i class="fas fa-sync-alt"></i> الطقم مش عاجبني، هات طقم غيره</button>
-                            
-                            <button onclick="window.exportToGeminiChat(\`${encodeURIComponent(shareText)}\`)" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow hover:bg-slate-900 transition flex items-center justify-center gap-2"><i class="fas fa-robot"></i> إرسال الطقم لـ Gemini لأخذ رأيه</button>
+                            <!-- 🔄 زرار التغيير المحدث اللي بيبعت النص سليم للدالة -->
+                            <button onclick="window.coordinateOutfitAI('${currentOutfitIds}')" class="w-full bg-amber-500 text-white py-3 rounded-xl font-bold shadow hover:bg-amber-600 transition flex items-center justify-center gap-2"><i class="fas fa-sync-alt"></i> الطقم مش عاجبني، هات طقم غيره</button>
                         </div>
                     </div>
                 `;
                 
-                showModal("الطقم جاهز يا بطل! 🤵", html, [{text: "إغلاق", class: "bg-slate-200 text-slate-800 w-full", onClick: () => { window.currentOccasion = null; }}]);
+                showModal("الطقم جاهز يا بطل! 🤵", html, [{
+                    text: "إغلاق", 
+                    class: "bg-slate-200 text-slate-800 w-full", 
+                    onClick: () => { 
+                        window.currentOccasion = null; 
+                        window.accumulatedRejectedIds = []; // تصفير الذاكرة لو قفل النافذة
+                    }
+                }]);
             } else {
-                alert("الستايلست مقدرش يقرر طقم مناسب.. جرب تعدل أسامي بعض القطع للتوضيح.");
+                alert("الستايلست مقدرش يقرر طقم مناسب من اللي باقي في الدولاب.. جرب تفك الحظر عن تكرار اللبس.");
                 window.currentOccasion = null;
+                window.accumulatedRejectedIds = [];
             }
         };
 
-        // دالة تسجيل الطقم (متعدلة لتنظيف المناسبة بعد اللبس)
+        // دالة تسجيل اللبس (تصفير الذاكرة بعد التسجيل)
         window.markOutfitWorn = function(idsStr) {
             const ids = idsStr.split(',');
             ids.forEach(id => {
                 const item = appState.wardrobe.find(i => i.id === id);
                 if(item) { item.state = 'worn'; item.lastWorn = new Date().toLocaleDateString('ar-EG'); }
             });
-            window.currentOccasion = null; // تنظيف الذاكرة
+            window.currentOccasion = null; 
+            window.accumulatedRejectedIds = []; 
             saveState(); navigate('wardrobe');
             document.getElementById('custom-modal').classList.add('hidden');
             alert("تم تسجيل الطقم في سجل اللبس بنجاح! شياكة يا دكتور 🔥");
