@@ -5407,13 +5407,13 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
         // Utils
 
 // ==========================================
-        // 💬 محرك الشات الذكي الشامل (قابل للحفظ والاسترجاع - محدث للنوافذ الداخلية)
+        // 💬 محرك الشات الذكي الشامل (بأزرار ملونة وواضحة جداً)
         // ==========================================
         let currentSmartSession = { id: null, type: '', title: '', messages: [] };
 
         window.openSmartChat = async function(type, title, initialPrompt = null, existingChatId = null) {
             if(!appState.apiKeys.gemini) return showModal("تنبيه ⚠️", "<p class='text-center py-4 font-bold text-slate-700'>يرجى إدخال مفتاح Gemini في الإعدادات أولاً!</p>", [{text: "حسناً", class: "bg-slate-600 text-white"}]);
-            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [] };
+            if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
             
             if (existingChatId) {
                 const chatObj = appState.savedDeepChats[type].find(c => c.id === existingChatId);
@@ -5422,37 +5422,50 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
                 currentSmartSession = { id: generateId(), type: type, title: title.substring(0, 40), messages: [], date: new Date().toLocaleString('ar-EG') };
             }
 
-            const icons = { quran: 'fa-book-quran', hadith: 'fa-scroll', shopping: 'fa-shopping-cart', assistant: 'fa-robot' };
-            const colors = { quran: 'emerald', hadith: 'amber', shopping: 'orange', assistant: 'teal' };
-            const color = colors[type];
+            const icons = { quran: 'fa-book-quran', hadith: 'fa-scroll', shopping: 'fa-shopping-cart', assistant: 'fa-robot', wardrobe: 'fa-tshirt' };
+            const icon = icons[type] || 'fa-comments';
 
+            // 💡 تصميم الشات مع الأزرار الجديدة البارزة
             const html = `
                 <div class="flex flex-col h-[80vh] bg-slate-50 rounded-xl overflow-hidden" dir="rtl">
-                    <div class="bg-${color}-600 text-white p-4 font-bold flex flex-col md:flex-row justify-between items-center shadow-md gap-3">
-                        <span class="flex items-center gap-2 truncate"><i class="fas ${icons[type]} text-2xl"></i> ${currentSmartSession.title}</span>
-                        <div class="flex gap-2">
-                            <button onclick="window.saveSmartChatSession()" class="bg-white text-${color}-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-100 transition"><i class="fas fa-save"></i> حفظ المحادثة</button>
-                            <button onclick="window.viewChatHistory('${type}')" class="bg-${color}-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-${color}-900 transition"><i class="fas fa-history"></i> السجل</button>
+                    <!-- الهيدر العلوي -->
+                    <div class="bg-indigo-800 text-white p-4 font-bold flex flex-col md:flex-row justify-between items-center shadow-md gap-3">
+                        <span class="flex items-center gap-2 truncate"><i class="fas ${icon} text-2xl text-indigo-300"></i> ${currentSmartSession.title}</span>
+                        
+                        <!-- 💡 أزرار الحفظ والسجل (ألوان واضحة وثابتة) -->
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <button onclick="window.saveSmartChatSession()" class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 border border-emerald-500">
+                                <i class="fas fa-save"></i> حفظ المحادثة
+                            </button>
+                            <button onclick="window.viewChatHistory('${type}')" class="flex-1 md:flex-none bg-slate-700 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 border border-slate-600">
+                                <i class="fas fa-history text-slate-300"></i> السجل
+                            </button>
                         </div>
                     </div>
-                    <div id="smart-chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100">
+                    
+                    <!-- صندوق المحادثة -->
+                    <div id="smart-chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100 custom-scrollbar">
                     </div>
-                    <div class="p-3 bg-white border-t flex gap-2 items-center">
-                        <input type="text" id="smart-chat-input" placeholder="اكتب رسالتك هنا..." class="flex-1 border-2 border-${color}-200 p-3 rounded-xl outline-none focus:border-${color}-500" onkeypress="if(event.key==='Enter') window.sendSmartChatMsg()">
-                        <button onclick="window.sendSmartChatMsg()" class="bg-${color}-600 hover:bg-${color}-700 text-white w-12 h-12 rounded-xl font-bold transition flex justify-center items-center"><i class="fas fa-paper-plane"></i></button>
+                    
+                    <!-- 💡 مربع النص وزر الإرسال (واضح وبارز) -->
+                    <div class="p-3 bg-white border-t border-slate-300 flex gap-3 items-center rounded-b-xl shadow-inner">
+                        <input type="text" id="smart-chat-input" placeholder="اكتب رسالتك للستايلست هنا..." class="flex-1 border-2 border-slate-300 p-3 rounded-xl outline-none focus:border-indigo-500 font-bold text-slate-800 shadow-sm" onkeypress="if(event.key==='Enter') window.sendSmartChatMsg()">
+                        <button onclick="window.sendSmartChatMsg()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-12 rounded-xl font-bold transition flex justify-center items-center shadow-md shrink-0">
+                            <i class="fas fa-paper-plane text-lg"></i>
+                        </button>
                     </div>
                 </div>
             `;
             openFSModal(`محادثة: ${title}`, html);
 
             if (!existingChatId && initialPrompt) {
-                document.getElementById('smart-chat-box').innerHTML = `<div class="text-center text-${color}-500 font-bold py-10"><i class="fas fa-spinner fa-spin text-3xl mb-2 block"></i> جاري إعداد الرد الأول...</div>`;
+                document.getElementById('smart-chat-box').innerHTML = `<div class="text-center text-indigo-600 font-bold py-10"><i class="fas fa-spinner fa-spin text-4xl mb-3 block"></i> جاري إعداد الرد الأول...</div>`;
                 const res = await askAI(initialPrompt, null, "text", "جاري التحليل...");
                 document.getElementById('smart-chat-box').innerHTML = '';
-                if(res) { window.appendSmartChatMsg('ai', res, color); }
+                if(res) { window.appendSmartChatMsg('ai', res, 'indigo'); }
             } else {
                 document.getElementById('smart-chat-box').innerHTML = '';
-                currentSmartSession.messages.forEach(m => window.appendSmartChatMsg(m.sender, m.text, color));
+                currentSmartSession.messages.forEach(m => window.appendSmartChatMsg(m.sender, m.text, 'indigo'));
             }
         };
 
