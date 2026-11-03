@@ -6495,15 +6495,19 @@ window.closeQuranPlayer = function() {
 
 
 
-// 5. دالة الوصف الذكي للقطعة المفردة 🤖
+// 5. دالة الوصف الذكي للقطعة المفردة 🤖 (محدثة لتخطي حظر CORS)
         window.generateSingleItemAIDesc = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if (!item || !item.img) return;
 
             showLoading("الستايلست بيحلل صورة القطعة 🤖...");
             try {
-                // جلب الصورة من سحابة فايربيز وتحويلها لبيانات يقرأها الذكاء الاصطناعي
-                const res = await fetch(item.img);
+                // 💡 الحل السحري: استخدام وسيط (Proxy) لتخطي حظر المتصفح وقراءة الصورة بنجاح
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(item.img)}`;
+                const res = await fetch(proxyUrl);
+                
+                if (!res.ok) throw new Error("فشل جلب الصورة عبر الوسيط");
+                
                 const blob = await res.blob();
                 const base64Data = await new Promise((resolve) => {
                     const reader = new FileReader();
@@ -6520,9 +6524,9 @@ window.closeQuranPlayer = function() {
                 
                 if (aiRes && aiRes.desc) {
                     item.desc = aiRes.desc;
-                    item.name = aiRes.desc; // توحيد الوصف والاسم
+                    item.name = aiRes.desc; 
                     saveState();
-                    navigate('wardrobe'); // تحديث الشاشة
+                    navigate('wardrobe'); 
                     hideLoading();
                 } else {
                     hideLoading();
@@ -6531,7 +6535,7 @@ window.closeQuranPlayer = function() {
             } catch (e) {
                 console.error("خطأ أثناء تحليل الصورة:", e);
                 hideLoading();
-                alert("حدث خطأ أثناء جلب الصورة لتحليلها. تأكد من جودة الإنترنت.");
+                alert("حدث خطأ أثناء جلب الصورة لتحليلها. قد يكون الفايربيز يمنع الوصول، جرب مرة أخرى.");
             }
         };
 
