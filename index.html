@@ -6234,11 +6234,12 @@ window.closeQuranPlayer = function() {
                             const aiB64 = await compressImageFile(files[i], 400, 0.5);
                             
                             // 🎯 هندسة أوامر صارمة لوصف مختصر (3 لـ 5 كلمات)
-                            let promptStr = `أنت خبير أزياء. اكتب وصفاً دقيقاً ومختصراً جداً لهذه القطعة في (3 إلى 5 كلمات كحد أقصى). اذكر اللون والنوع فقط. مثال: 'قميص أبيض سادة' أو 'بنطلون جينز كحلي'. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                                                        // 🎯 هندسة أوامر صارمة للحصول على وصف تفصيلي عند الرفع
+                            let promptStr = `أنت خبير أزياء محترف. اكتب وصفاً تفصيلياً ودقيقاً لهذه القطعة. اذكر النوع، اللون الأساسي، القصة (كاجوال/كلاسيك)، وأي تفاصيل مميزة (مثل: ياقة، أزرار، نقوش، أو نوع القماش). مثال: "قميص كاجوال كاروهات أزرق في أبيض بخامة قطنية". أرجع JSON فقط: {"desc": "الوصف التفصيلي هنا"}`;
                             
-                            if (category === 'عطر') promptStr = `ما اسم ماركة هذا العطر؟ (اكتب كلمتين فقط). أرجع JSON فقط: {"desc": "اسم العطر"}`;
-                            if (category === 'ساعة' || category === 'إكسسوار') promptStr = `صف هذه القطعة في 3 كلمات فقط (اللون والنوع). أرجع JSON فقط: {"desc": "الوصف هنا"}`;
-                            
+                            if (category === 'عطر') promptStr = `أنت خبير عطور. اكتب وصفاً تفصيلياً لهذا العطر يوضح اسم الماركة، الإصدار، وما إذا كان رجالي أو للجنسين. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                            if (category === 'ساعة' || category === 'إكسسوار') promptStr = `أنت خبير إكسسوارات. صف هذه القطعة بالتفصيل. اذكر النوع، اللون، وتفاصيل التصميم البارزة. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+
                             const res = await askAI(promptStr, {mimeType: "image/jpeg", data: aiB64}, "json", `تحليل القطعة...`);
                             if(res && res.desc) { 
                                 itemName = res.desc; 
@@ -6604,51 +6605,86 @@ window.closeQuranPlayer = function() {
         };
 
 
-        
-        // 5. الإجراء الجماعي للمحدد (لبس / سلة / حذف نهائي من السحابة)
+               // دالة التحكم في القطع المحددة (محدثة لدعم الوصف الذكي الجماعي)
         window.bulkAction = async function(action) {
-            const count = window.selectedWardrobeItems.length;
-            if(count === 0) return;
+            if(!window.selectedWardrobeItems || window.selectedWardrobeItems.length === 0) return;
+            
+            // 🤖 معالجة الوصف الذكي الجماعي
+            if (action === 'ai_desc') {
+                const ids = [...window.selectedWardrobeItems];
+                showLoading(`جاري تجهيز ${ids.length} قطعة للتحليل الذكي...`);
+                let successCount = 0;
 
-            let msg = action === 'worn' ? `تسجيل (${count}) قطع كملبوسة اليوم؟` : action === 'dirty' ? `نقل (${count}) قطع لسلة الغسيل؟` : `⚠️ تحذير: حذف (${count}) قطع نهائياً من البرنامج ومن السحابة؟`;
+                for (let i = 0; i < ids.length; i++) {
+                    const id = ids[i];
+                    const item = appState.wardrobe.find(item => item.id === id);
+                    if (!item || !item.img) continue;
 
-            showModal("تأكيد الإجراء الجماعي", `<p class="text-center font-bold py-4">${msg}</p>`, [
-                {text: "إلغاء", class: "bg-slate-200 text-slate-800", onClick: () => window.clearWardrobeSelection()},
-                {text: "نعم، تأكيد", class: action === 'delete' ? "bg-red-600 text-white" : "bg-indigo-600 text-white", onClick: async () => {
-                    if(action === 'delete') {
-                        showLoading("جاري الحذف الجماعي من السحابة...");
-                        for(const id of window.selectedWardrobeItems) {
-                            const item = appState.wardrobe.find(i => i.id === id);
-                            if(item && item.img && item.img.includes('firebasestorage.googleapis.com')) {
-                                try {
-                                    const bucketUrl = "home-9ba3b.firebasestorage.app";
-                                    const startIndex = item.img.indexOf('/o/') + 3;
-                                    const endIndex = item.img.indexOf('?');
-                                    const encodedPath = endIndex > -1 ? item.img.substring(startIndex, endIndex) : item.img.substring(startIndex);
-                                    const filePath = decodeURIComponent(encodedPath);
-                                    const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(filePath)}`;
-                                    await fetch(deleteUrl, { method: 'DELETE' });
-                                } catch(err) {
-                                    console.error("خطأ في حذف ملف من السحابة:", err);
-                                }
-                            }
-                        }
-                        hideLoading();
-                        appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
-                    } else {
-                        const today = new Date().toLocaleDateString('ar-EG');
-                        window.selectedWardrobeItems.forEach(id => {
-                            const item = appState.wardrobe.find(i => i.id === id);
-                            if(item) { item.state = action; if(action === 'worn') item.lastWorn = today; }
+                    showLoading(`الستايلست بيحلل قطعة (${i + 1} من ${ids.length}) 🤖...`);
+                    try {
+                        const res = await fetch(item.img);
+                        if (!res.ok) throw new Error("فشل الجلب");
+                        
+                        const blob = await res.blob();
+                        const base64Data = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const result = reader.result;
+                                resolve(result.includes(',') ? result.split(',')[1] : result);
+                            };
+                            reader.readAsDataURL(blob);
                         });
-                    }
-                    window.selectedWardrobeItems = []; 
-                    saveState();
-                    navigate('wardrobe'); 
-                }}
-            ]);
-        };
 
+                        let mime = blob.type;
+                        if (!mime || mime === 'application/octet-stream') mime = 'image/jpeg';
+
+                        // نفس أوامر الوصف التفصيلي الصارمة
+                        let promptStr = `أنت خبير أزياء محترف. اكتب وصفاً تفصيلياً ودقيقاً لهذه القطعة. اذكر النوع، اللون الأساسي، القصة (كاجوال/كلاسيك)، وأي تفاصيل مميزة (مثل: ياقة، أزرار، نقوش، أو نوع القماش). مثال: "قميص كاجوال كاروهات أزرق في أبيض بخامة قطنية". أرجع JSON فقط: {"desc": "الوصف التفصيلي هنا"}`;
+                        if (item.cat === 'عطر') promptStr = `أنت خبير عطور. اكتب وصفاً تفصيلياً لهذا العطر يوضح اسم الماركة، الإصدار، وما إذا كان رجالي أو للجنسين. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                        if (item.cat === 'ساعة' || item.cat === 'إكسسوار') promptStr = `أنت خبير إكسسوارات. صف هذه القطعة بالتفصيل. اذكر النوع، اللون، وتفاصيل التصميم البارزة. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+
+                        const aiRes = await askAI(promptStr, {mimeType: mime, data: base64Data}, "json", `تحليل...`);
+                        
+                        if (aiRes && aiRes.desc) {
+                            item.desc = aiRes.desc;
+                            item.name = aiRes.desc; 
+                            successCount++;
+                        }
+                    } catch (e) {
+                        console.error(`خطأ في تحليل قطعة ${id}:`, e);
+                    }
+                }
+
+                window.selectedWardrobeItems = []; // تفريغ التحديد بعد الانتهاء
+                saveState();
+                navigate('wardrobe');
+                hideLoading();
+
+                if (successCount > 0) {
+                    setTimeout(() => alert(`✅ تم كتابة وصف تفصيلي لـ ${successCount} قطعة بنجاح!`), 300);
+                } else {
+                    alert("لم نتمكن من تحليل القطع، تأكد من الاتصال بالإنترنت.");
+                }
+                return;
+            }
+
+            // باقي الإجراءات العادية (لبس، سلة، حذف)
+            if(action === 'delete') {
+                if(!confirm("هل أنت متأكد من حذف القطع المحددة نهائياً؟")) return;
+                appState.wardrobe = appState.wardrobe.filter(i => !window.selectedWardrobeItems.includes(i.id));
+            } else {
+                appState.wardrobe.forEach(i => {
+                    if(window.selectedWardrobeItems.includes(i.id)) {
+                        i.state = action;
+                        if(action === 'worn') i.lastWorn = new Date().toLocaleDateString('ar-EG');
+                    }
+                });
+            }
+            window.selectedWardrobeItems = [];
+            saveState(); navigate('wardrobe');
+        };
+ 
+        
 
         // ==========================================
         // 👔 واجهة الدولاب (محدثة بالمزامنة التلقائية)
@@ -6687,12 +6723,17 @@ window.closeQuranPlayer = function() {
                     </div>
 
                     <!-- شريط أدوات التحديد المتعدد العائم -->
-                    <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 gap-2 transition-all">
-                        <div class="text-white font-bold px-3 py-2 border-l border-slate-600 flex items-center">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
-                        <button onclick="window.bulkAction('worn')" class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-indigo-600 transition"><i class="fas fa-check-double ml-1"></i> لُبس اليوم</button>
-                        <button onclick="window.bulkAction('dirty')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition"><i class="fas fa-shopping-basket ml-1"></i> للسلة 🧺</button>
-                        <button onclick="window.bulkAction('delete')" class="bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-red-600 transition"><i class="fas fa-trash ml-1"></i> حذف</button>
-                        <button onclick="window.clearWardrobeSelection()" class="bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-slate-500 transition"><i class="fas fa-times"></i> إلغاء</button>
+                                        <!-- شريط أدوات التحديد المتعدد العائم (محدث بزر الوصف الذكي وتصميم متوافق مع الموبايل) -->
+                    <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex-wrap justify-center items-center gap-2 transition-all w-[95%] max-w-lg flex">
+                        <div class="text-white font-bold px-3 py-1 border-b md:border-b-0 md:border-l border-slate-600 flex items-center justify-center w-full md:w-auto mb-1 md:mb-0">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
+                        <div class="flex gap-2 w-full md:w-auto justify-center">
+                            <button onclick="window.bulkAction('worn')" class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-indigo-600 transition flex-1"><i class="fas fa-check-double"></i> لبس</button>
+                            <button onclick="window.bulkAction('dirty')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-orange-600 transition flex-1"><i class="fas fa-shopping-basket"></i> سلة</button>
+                            <!-- 🤖 الزر الجديد للوصف الذكي الجماعي -->
+                            <button onclick="window.bulkAction('ai_desc')" class="bg-teal-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-teal-600 transition flex-1"><i class="fas fa-robot"></i> وصف ذكي</button>
+                            <button onclick="window.bulkAction('delete')" class="bg-red-500 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-red-600 transition flex-1"><i class="fas fa-trash"></i> حذف</button>
+                            <button onclick="window.clearWardrobeSelection()" class="bg-slate-600 text-white px-3 py-2 rounded-lg text-[11px] md:text-sm font-bold hover:bg-slate-500 transition"><i class="fas fa-times"></i></button>
+                        </div>
                     </div>
 
                     <!-- الملف الشخصي للستايل -->
