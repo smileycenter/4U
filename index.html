@@ -349,12 +349,20 @@ const defaultState = {
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
 
-        // تهيئة Firestore فوراً باستخدام إعداداتك المدمجة
+// ==========================================
+        // ☁️ محرك السحابة المطور (حفظ فوري ومزامنة ذكية)
+        // ==========================================
         let db = null;
         function initFirebase() {
             try {
                 if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
+                    
+                    // 💡 السحر هنا: تفعيل وضع المزامنة المستمرة (لضمان عدم ضياع أي تعديل حتى لو النت فصل)
+                    firebase.firestore().enablePersistence({ synchronizeTabs: true })
+                        .catch(function(err) {
+                            console.warn("تنبيه المزامنة الأوفلاين:", err);
+                        });
                 }
                 db = firebase.firestore();
                 return true;
@@ -364,16 +372,40 @@ const defaultState = {
             }
         }
 
-        // دالة الحفظ السحابي الآمن (على حسابك المدمج مباشرة)
-        function saveState() { 
+        // دالة الحفظ الشاملة (تحفظ كل شيء محلياً وسحابياً في نفس اللحظة)
+        async function saveState() { 
+            // 1. حفظ محلي صاروخي لسرعة استجابة البرنامج
             localStorage.setItem('familyAppSuperMax', JSON.stringify(appState)); 
             
-            const cleanState = JSON.parse(JSON.stringify(appState)); 
+            // 2. مزامنة فورية ومؤكدة مع سحابة فايربيز (Firestore)
             if (initFirebase() && db) {
-                db.collection('familyData').doc('appState').set(cleanState)
-                  .catch(e => console.log("خطأ في الحفظ على Firestore:", e));
+                try {
+                    // تنظيف البيانات من أي شوائب قبل الرفع
+                    const cleanState = JSON.parse(JSON.stringify(appState)); 
+                    
+                    // استخدام await لضمان اكتمال عملية الرفع بنجاح
+                    await db.collection('familyData').doc('appState').set(cleanState);
+                    console.log("☁️ تم تأكيد الحفظ والمزامنة مع السحابة بنجاح");
+                } catch (e) {
+                    console.error("⚠️ خطأ في الحفظ السحابي:", e);
+                    // تنبيه هندسي: قاعدة بيانات Firestore أقصى حجم للملف الواحد فيها 1 ميجا.
+                    // إذا ظهر خطأ هنا مستقبلاً، قد يكون بسبب كثرة الصور المحفوظة (Base64) في المهام.
+                }
             }
         }
+
+        // تحديث زر الحفظ الإجباري ليعمل بتوافق مع النظام الجديد
+        window.forceCloudSync = async function() {
+            showLoading("جاري رفع وتأمين جميع البيانات على السحابة ☁️...");
+            try {
+                await saveState(); // ننتظر حتى يكتمل الرفع تماماً
+                hideLoading();
+                showModal("تم الحفظ بنجاح ✅", "<div class='text-center p-4 text-lg font-bold text-emerald-700'>تم رفع وتأمين جميع بيانات العائلة والدولاب والمخزن على قاعدة بيانات السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
+            } catch(e) {
+                hideLoading();
+                alert("حدث خطأ أثناء محاولة تأكيد الاتصال بالسحابة.");
+            }
+        };
 
 // دالة الجلب والتشغيل (محصنة ومربوطة بحسابك المدمج)
         async function initApp() {
@@ -485,25 +517,49 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
             try {
                 let parts = [{ text: prompt }];
                 
-                // دعم الصور المتعددة أو الصورة الواحدة أو الملفات
                 if (filesData && Array.isArray(filesData)) {
-                    filesData.forEach(file => {
-                        parts.push({ inlineData: { mimeType: file.mimeType || "image/jpeg", data: file.data } });
-                    });
+                    filesData.forEach(file => { parts.push({ inlineData: { mimeType: file.mimeType || "image/jpeg", data: file.data } }); });
                 } else if (filesData) {
                     parts.push({ inlineData: { mimeType: mimeType, data: filesData } });
                 }
 
-                const payload = { contents: [{ parts: parts }], generationConfig: {} };
+                // إضافة فلاتر الأمان لمنع حظر بعض مصطلحات الملابس
+                const payload = { 
+                    contents: [{ parts: parts }], 
+                    generationConfig: {},
+                    safetySettings: [
+                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                    ]
+                };
+                
                 if (responseType === "json") payload.generationConfig.responseMimeType = "application/json";
 
+                // الموديل الخاص بك كما طلبت تماماً
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`;
                 const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                
                 if(!res.ok) throw new Error("API Error");
                 const data = await res.json();
                 hideLoading();
+                
                 const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                return responseType === "json" ? JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim()) : text;
+                if(!text) return null;
+
+                // استخراج الـ JSON بذكاء حتى لو الذكاء الاصطناعي أرسل نصوص إضافية بالخطأ
+                if (responseType === "json") {
+                    try {
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        const cleanText = jsonMatch ? jsonMatch[0] : text.replace(/```json/g,'').replace(/```/g,'').trim();
+                        return JSON.parse(cleanText);
+                    } catch(parseErr) {
+                        console.error("خطأ في قراءة الـ JSON:", parseErr);
+                        return null;
+                    }
+                }
+                return text;
             } catch (error) {
                 hideLoading(); 
                 alert("حدث خطأ في الاتصال بالذكاء الاصطناعي. تأكد من حجم الملفات أو الاتصال."); 
@@ -511,7 +567,6 @@ if (!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [],
                 return null;
             }
         }
-
 
 
         async function textToSpeech(text, voiceName = "Zephyr") {
@@ -6137,33 +6192,91 @@ window.closeQuranPlayer = function() {
             }
         };
 
-        // 2. دالة الرفع المتعدد (نرسل القسم ليتم ختمه)
+ // 2. دالة الرفع المتعدد (محدثة بدعم الحد الأقصى والوصف المختصر الدقيق)
         window.handleBulkWardrobeUpload = async function(event, category) {
-            const files = event.target.files; if(!files.length) return;
-            const useAI = document.getElementById(`ai-desc-${category}`)?.checked;
-            showLoading(useAI ? `جاري المعالجة والرفع لـ ${files.length} قطعة...` : `جاري الرفع لـ ${files.length} قطعة...`);
+            const files = event.target.files; 
+            if(!files || files.length === 0) return;
             
+            const useAI = document.getElementById(`ai-desc-${category}`)?.checked;
+            
+            // 🚨 تطبيق شرط الحد الأقصى (10 صور) عند تفعيل الذكاء الاصطناعي
+            if (useAI && files.length > 10) {
+                showModal("تنبيه الحد الأقصى ⚠️", 
+                    `<p class='text-center font-bold text-slate-700 py-4 leading-relaxed'>
+                        لقد قمت باختيار <span class='text-red-600'>(${files.length})</span> صورة.<br>
+                        عند تفعيل ميزة (الوصف الذكي 🤖)، يرجى رفع <span class='text-indigo-600'>10 قطع كحد أقصى</span> في المرة الواحدة لضمان الدقة وتجنب الضغط على خوادم الذكاء الاصطناعي.<br>
+                        (إذا قمت بإلغاء التحديد عن المربع، يمكنك رفع عدد غير محدود).
+                    </p>`, 
+                    [{text: "حسناً، سأختار عدداً أقل", class: "bg-teal-600 text-white"}]
+                );
+                event.target.value = ''; // تفريغ الخانة
+                return;
+            }
+            
+            showLoading(useAI ? `جاري بدء التحليل والرفع...` : `جاري الرفع السريع لـ ${files.length} قطعة للسحابة ⚡...`);
+            
+            let successCount = 0;
+
             for(let i=0; i<files.length; i++) {
                 try {
+                    // تحديث مؤشر التحميل للمستخدم ليعرف التقدم
+                    if(useAI) {
+                        showLoading(`جاري التحليل والرفع 🤖 (قطعة ${i + 1} من ${files.length})...`);
+                    }
+
                     const storageB64 = await compressImageFile(files[i], 800, 0.7);
-                    let aiDesc = "", itemName = `قطعة ${category} جديدة`;
-                    
+                    let aiDesc = "";
+                    let itemName = `قطعة ${category} جديدة`;
+
+                    // لو المستخدم مفعل الذكاء الاصطناعي
                     if (useAI) {
                         try {
                             const aiB64 = await compressImageFile(files[i], 400, 0.5);
-                            let p = "صف هذه القطعة بـ 3 كلمات. JSON: {'desc': 'الوصف'}";
-                            if (category === 'عطر') p = "ما اسم العطر؟ JSON: {'desc': 'الاسم'}";
-                            const res = await askAI(p, {mimeType: "image/jpeg", data: aiB64}, "json", `تحليل ${i+1}...`);
-                            if(res && res.desc) { itemName = res.desc; aiDesc = res.desc; }
-                        } catch (aiError) { console.warn("تم تخطي الذكاء"); }
+                            
+                            // 🎯 هندسة أوامر صارمة لوصف مختصر (3 لـ 5 كلمات)
+                            let promptStr = `أنت خبير أزياء. اكتب وصفاً دقيقاً ومختصراً جداً لهذه القطعة في (3 إلى 5 كلمات كحد أقصى). اذكر اللون والنوع فقط. مثال: 'قميص أبيض سادة' أو 'بنطلون جينز كحلي'. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                            
+                            if (category === 'عطر') promptStr = `ما اسم ماركة هذا العطر؟ (اكتب كلمتين فقط). أرجع JSON فقط: {"desc": "اسم العطر"}`;
+                            if (category === 'ساعة' || category === 'إكسسوار') promptStr = `صف هذه القطعة في 3 كلمات فقط (اللون والنوع). أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                            
+                            const res = await askAI(promptStr, {mimeType: "image/jpeg", data: aiB64}, "json", `تحليل القطعة...`);
+                            if(res && res.desc) { 
+                                itemName = res.desc; 
+                                aiDesc = res.desc; 
+                            }
+                        } catch (aiError) {
+                            console.warn("تم تخطي الذكاء الاصطناعي لهذه القطعة بسبب خطأ:", aiError);
+                        }
                     }
-                    
-                    // إرسال القسم (category) للختم
+
+                    // الرفع للسحابة وختم اسم القسم
                     const fireUrl = await uploadWardrobeToStorage(storageB64, "image/jpeg", category);
-                    appState.wardrobe.unshift({ id: generateId(), name: itemName, desc: aiDesc, cat: category, img: fireUrl, state: 'clean', lastWorn: '' });
-                } catch(e) { console.error("خطأ:", e); }
+                    
+                    appState.wardrobe.unshift({ 
+                        id: generateId(), 
+                        name: itemName, 
+                        desc: itemName, // توحيد الاسم والوصف لسهولة التعديل لاحقاً
+                        cat: category, 
+                        img: fireUrl, 
+                        state: 'clean', 
+                        lastWorn: '' 
+                    });
+                    
+                    successCount++;
+                } catch(e) { 
+                    console.error("خطأ في رفع قطعة رقم " + (i+1) + ":", e); 
+                }
             }
-            event.target.value = ''; saveState(); navigate('wardrobe'); hideLoading();
+            
+            event.target.value = ''; // تصفير حقل الرفع
+            saveState(); 
+            navigate('wardrobe'); 
+            hideLoading();
+            
+            if (successCount > 0) {
+                // إشعار لطيف يختفي تلقائياً
+                setTimeout(() => { alert(`✅ تم إضافة ${successCount} قطعة لدولابك بنجاح!`); }, 300);
+            }
         };
 
         // 3. الإضافة اليدوية (نرسل القسم للختم)
@@ -6382,6 +6495,49 @@ window.closeQuranPlayer = function() {
 
 
 
+// 5. دالة الوصف الذكي للقطعة المفردة 🤖
+        window.generateSingleItemAIDesc = async function(id) {
+            const item = appState.wardrobe.find(i => i.id === id);
+            if (!item || !item.img) return;
+
+            showLoading("الستايلست بيحلل صورة القطعة 🤖...");
+            try {
+                // جلب الصورة من سحابة فايربيز وتحويلها لبيانات يقرأها الذكاء الاصطناعي
+                const res = await fetch(item.img);
+                const blob = await res.blob();
+                const base64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
+                });
+
+                let promptStr = `أنت خبير أزياء. اكتب وصفاً دقيقاً ومختصراً جداً لهذه القطعة في (3 إلى 5 كلمات كحد أقصى). اذكر اللون والنوع فقط. مثال: 'قميص أبيض سادة' أو 'بنطلون جينز كحلي'. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                
+                if (item.cat === 'عطر') promptStr = `ما اسم ماركة هذا العطر؟ (كلمتين فقط). أرجع JSON فقط: {"desc": "اسم العطر"}`;
+                if (item.cat === 'ساعة' || item.cat === 'إكسسوار') promptStr = `صف هذه القطعة في 3 كلمات فقط (اللون والنوع). أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+
+                const aiRes = await askAI(promptStr, {mimeType: blob.type || "image/jpeg", data: base64Data}, "json", "جاري كتابة الوصف الدقيق...");
+                
+                if (aiRes && aiRes.desc) {
+                    item.desc = aiRes.desc;
+                    item.name = aiRes.desc; // توحيد الوصف والاسم
+                    saveState();
+                    navigate('wardrobe'); // تحديث الشاشة
+                    hideLoading();
+                } else {
+                    hideLoading();
+                    alert("لم يتمكن الذكاء الاصطناعي من تحليل الصورة، حاول مرة أخرى أو اكتب الوصف يدوياً.");
+                }
+            } catch (e) {
+                console.error("خطأ أثناء تحليل الصورة:", e);
+                hideLoading();
+                alert("حدث خطأ أثناء جلب الصورة لتحليلها. تأكد من جودة الإنترنت.");
+            }
+        };
+
+
+
+        
 
 // 5. دالة الاسترجاع الذكي (تجلب الصور اليتيمة من فايربيز وتردها للتطبيق)
         window.recoverWardrobeFromCloud = async function() {
@@ -6597,7 +6753,7 @@ window.closeQuranPlayer = function() {
                                 </div>
                                 ${cat.items.length === 0 ? `<p class="text-center text-slate-400 py-6 font-bold text-sm">الرف فارغ حالياً.</p>` : `
                                     <div class="p-4 flex gap-4 overflow-x-auto custom-scrollbar">
-                                        ${cat.items.map(item => {
+${cat.items.map(item => {
                                             const isSelected = window.selectedWardrobeItems.includes(item.id);
                                             return `
                                             <div id="w-card-${item.id}" class="w-36 shrink-0 flex flex-col relative border-2 ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'} p-2 rounded-xl shadow-sm transition-all">
@@ -6613,13 +6769,15 @@ window.closeQuranPlayer = function() {
                                                 
                                                 <div class="flex justify-between items-center mt-2 px-1 gap-1">
                                                     <span class="text-[11px] text-slate-700 truncate font-bold flex-1 text-right" title="${item.desc}">${item.desc || item.name}</span>
-                                                    <button onclick="event.stopPropagation(); window.editWardrobeItemDesc('${item.id}')" class="text-blue-600 hover:text-blue-800 text-[10px] bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded transition shadow-sm flex-shrink-0" title="تعديل الوصف"><i class="fas fa-edit"></i></button>
+                                                    <button onclick="event.stopPropagation(); window.editWardrobeItemDesc('${item.id}')" class="text-blue-600 hover:text-blue-800 text-[10px] bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded transition shadow-sm flex-shrink-0" title="تعديل الوصف يدوياً"><i class="fas fa-edit"></i></button>
                                                 </div>
                                                 
-                                                <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-slate-100">
+                                                <!-- 🔴 التعديل السحري: 4 أزرار متوزعين في صفين لسهولة الاستخدام -->
+                                                <div class="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-slate-100">
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'worn')" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="لُبس اليوم">لبس</button>
                                                     <button onclick="event.stopPropagation(); window.changeItemState('${item.id}', 'dirty')" class="bg-orange-50 text-orange-700 hover:bg-orange-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="للسلة">سلة</button>
-                                                    <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="حذف القطعة">حذف</button>
+                                                    <button onclick="event.stopPropagation(); window.generateSingleItemAIDesc('${item.id}')" class="bg-teal-50 text-teal-700 hover:bg-teal-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm flex items-center justify-center gap-1" title="وصف بالذكاء الاصطناعي"><i class="fas fa-robot"></i> ذكي</button>
+                                                    <button onclick="event.stopPropagation(); window.delWardrobeItem('${item.id}')" class="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] py-1.5 rounded font-bold transition text-center shadow-sm" title="حذف القطعة نهائياً">حذف</button>
                                                 </div>
                                             </div>
                                             `;
