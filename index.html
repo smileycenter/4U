@@ -6495,17 +6495,13 @@ window.closeQuranPlayer = function() {
 
 
 
-        // 5. دالة الوصف الذكي للقطعة المفردة 🤖 (نسخة الاتصال المباشر الصاروخي)
-                // 5. دالة الوصف الذكي للقطعة المفردة 🤖 (نسخة الاتصال المباشر الصاروخي)
         window.generateSingleItemAIDesc = async function(id) {
             const item = appState.wardrobe.find(i => i.id === id);
             if (!item || !item.img) return;
 
-            showLoading("الستايلست بيحلل صورة القطعة 🤖...");
+            showLoading("الستايلست بيفحص تفاصيل القطعة 🤖...");
             try {
-                // 💡 الاتصال المباشر بسيرفراتك بعد تفعيل الـ CORS بدون أي وسيط
                 const res = await fetch(item.img);
-                
                 if (!res.ok) throw new Error("فشل جلب الصورة");
                 
                 const blob = await res.blob();
@@ -6521,12 +6517,13 @@ window.closeQuranPlayer = function() {
                 let mime = blob.type;
                 if (!mime || mime === 'application/octet-stream') mime = 'image/jpeg';
 
-                let promptStr = `أنت خبير أزياء. اكتب وصفاً دقيقاً ومختصراً جداً لهذه القطعة في (3 إلى 5 كلمات كحد أقصى). اذكر اللون والنوع فقط. مثال: 'قميص أبيض سادة' أو 'بنطلون جينز كحلي'. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                // 🎯 نفس هندسة الأوامر التفصيلية للزرار الفردي
+                let promptStr = `أنت خبير أزياء محترف. اكتب وصفاً تفصيلياً ودقيقاً لهذه القطعة. اذكر النوع، اللون الأساسي، القصة (كاجوال/كلاسيك)، وأي تفاصيل مميزة (مثل: ياقة، أزرار، نقوش، أو نوع القماش). مثال: "قميص كاجوال كاروهات أزرق في أبيض بخامة قطنية" أو "بنطلون جينز كلاسيك أسود سادة". أرجع JSON فقط: {"desc": "الوصف التفصيلي هنا"}`;
                 
-                if (item.cat === 'عطر') promptStr = `ما اسم ماركة هذا العطر؟ (كلمتين فقط). أرجع JSON فقط: {"desc": "اسم العطر"}`;
-                if (item.cat === 'ساعة' || item.cat === 'إكسسوار') promptStr = `صف هذه القطعة في 3 كلمات فقط (اللون والنوع). أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                if (item.cat === 'عطر') promptStr = `أنت خبير عطور. اكتب وصفاً تفصيلياً لهذا العطر يوضح اسم الماركة، الإصدار، وما إذا كان رجالي أو للجنسين حسب شكل الزجاجة. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
+                if (item.cat === 'ساعة' || item.cat === 'إكسسوار') promptStr = `أنت خبير إكسسوارات. صف هذه القطعة بالتفصيل. اذكر النوع، لون المعدن أو السوار، وتفاصيل التصميم البارزة. أرجع JSON فقط: {"desc": "الوصف هنا"}`;
 
-                const aiRes = await askAI(promptStr, {mimeType: mime, data: base64Data}, "json", "جاري كتابة الوصف الدقيق...");
+                const aiRes = await askAI(promptStr, {mimeType: mime, data: base64Data}, "json", "جاري كتابة الوصف التفصيلي...");
                 
                 if (aiRes && aiRes.desc) {
                     item.desc = aiRes.desc;
@@ -6536,15 +6533,14 @@ window.closeQuranPlayer = function() {
                     hideLoading();
                 } else {
                     hideLoading();
-                    showModal("رسالة من النظام 🔔", "<p class='text-center font-bold p-4'>لم يتمكن الذكاء الاصطناعي من تحليل الصورة، حاول مرة أخرى أو اكتب الوصف يدوياً.</p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
+                    showModal("رسالة من النظام 🔔", "<p class='text-center font-bold p-4'>لم يتمكن الذكاء الاصطناعي من تحليل الصورة، حاول مرة أخرى.</p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
                 }
             } catch (e) {
                 console.error("خطأ أثناء تحليل الصورة:", e);
                 hideLoading();
-                showModal("تنبيه 🔔", "<p class='text-center font-bold p-4'>حدث خطأ أثناء جلب الصورة.<br><br><span class='text-sm text-slate-500'>إذا استمر هذا الخطأ، تأكد من تنفيذ أمر الـ CORS في Google Cloud Shell كما هو موضح.</span></p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
+                showModal("تنبيه 🔔", "<p class='text-center font-bold p-4'>حدث خطأ أثناء جلب الصورة. تأكد من جودة الإنترنت.</p>", [{text: "حسناً", class: "bg-teal-600 text-white"}]);
             }
         };
-
 
 
 
