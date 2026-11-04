@@ -1652,16 +1652,14 @@ function renderBudget(c) {
         };
 
 // --- Tasks & Requests ---
-        function renderTasks(c) {
+      function renderTasks(c) {
             const members = [{k:'husband',n:appState.profiles.husband.name},{k:'wife',n:appState.profiles.wife.name},{k:'aseel',n:appState.profiles.aseel.name},{k:'aser',n:appState.profiles.aser.name}];
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
-    <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
+                        <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Requests -->
@@ -1672,14 +1670,14 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="req-inp-${m.k}" placeholder="إضافة طلب..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('requests','${m.k}')" class="bg-pink-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.requests[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
-                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
+                                        const img = typeof t === 'object' && t.img ? \`<img src="\${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'\${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">\` : '';
+                                        return \`<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">\${text}</span>\${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('requests', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('requests','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="uploadItemImage('requests', '${m.k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delList('requests','${m.k}',\${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}</ul>
                                 </div>
                             `).join('')}
@@ -1692,14 +1690,14 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="tsk-inp-${m.k}" placeholder="إضافة مهمة..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('tasks','${m.k}')" class="bg-blue-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.tasks[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
-                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
+                                        const img = typeof t === 'object' && t.img ? \`<img src="\${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'\${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">\` : '';
+                                        return \`<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">\${text}</span>\${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('tasks', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('tasks','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="uploadItemImage('tasks', '${m.k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delList('tasks','${m.k}',\${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}</ul>
                                 </div>
                             `).join('')}
@@ -1733,25 +1731,25 @@ function renderPlans(c) {
                         </div>
                         <div class="space-y-4">
                             ${appState.futurePlans.map((p, i) => {
-                                onst img = p.img ? `<img src="${window.getSafeImgSrc(p.img)}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'${window.getSafeImgSrc(p.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
-                                return `
+                                const img = p.img ? \`<img src="\${window.getSafeImgSrc(p.img)}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'\${window.getSafeImgSrc(p.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
+                                return \`
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-xl shadow-sm gap-4">
                                     <div class="flex-1 flex flex-col">
-                                        <div class="font-bold text-lg text-slate-800 ${p.status==='done'?'line-through text-slate-400':''}">${p.text}</div>${img}
+                                        <div class="font-bold text-lg text-slate-800 \${p.status==='done'?'line-through text-slate-400':''}">\${p.text}</div>\${img}
                                         <div class="text-xs mt-3 flex flex-wrap gap-2 bg-slate-50 p-2 rounded-lg w-fit border">
-                                            <span class="text-purple-600 font-bold"><i class="fas fa-user-tag"></i> ${p.member}</span>
-                                            <span class="text-amber-600 font-bold bg-amber-100 px-2 rounded-full border border-amber-200">${p.stars || 0} ⭐</span>
-                                            <span class="text-red-500 font-bold"><i class="fas fa-clock"></i> ديدلاين: ${p.deadline||'غير محدد'}</span>
+                                            <span class="text-purple-600 font-bold"><i class="fas fa-user-tag"></i> \${p.member}</span>
+                                            <span class="text-amber-600 font-bold bg-amber-100 px-2 rounded-full border border-amber-200">\${p.stars || 0} ⭐</span>
+                                            <span class="text-red-500 font-bold"><i class="fas fa-clock"></i> ديدلاين: \${p.deadline||'غير محدد'}</span>
                                         </div>
                                     </div>
                                     <div class="flex gap-2 items-center mt-3 md:mt-0 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0">
-                                        <button onclick="uploadItemImage('plans', ${i})" class="text-teal-600 bg-teal-50 px-3 py-2 rounded-lg hover:bg-teal-100 transition font-bold text-sm"><i class="fas fa-camera"></i> صورة</button>
-                                        <select onchange="window.updatePlanStatus(${i}, this.value)" class="border border-slate-200 p-2 rounded-lg text-sm bg-white outline-none cursor-pointer">
-                                            <option value="pending" ${p.status==='pending'?'selected':''}>قيد التنفيذ</option><option value="done" ${p.status==='done'?'selected':''}>تم التنفيذ</option><option value="postponed" ${p.status==='postponed'?'selected':''}>مؤجلة</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>لم تنفذ</option>
+                                        <button onclick="uploadItemImage('plans', \${i})" class="text-teal-600 bg-teal-50 px-3 py-2 rounded-lg hover:bg-teal-100 transition font-bold text-sm"><i class="fas fa-camera"></i> صورة</button>
+                                        <select onchange="window.updatePlanStatus(\${i}, this.value)" class="border border-slate-200 p-2 rounded-lg text-sm bg-white outline-none cursor-pointer">
+                                            <option value="pending" \${p.status==='pending'?'selected':''}>قيد التنفيذ</option><option value="done" \${p.status==='done'?'selected':''}>تم التنفيذ</option><option value="postponed" \${p.status==='postponed'?'selected':''}>مؤجلة</option><option value="cancelled" \${p.status==='cancelled'?'selected':''}>لم تنفذ</option>
                                         </select>
-                                        <button onclick="window.delPlan(${i})" class="text-red-500 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                                        <button onclick="window.delPlan(\${i})" class="text-red-500 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
                                     </div>
-                                </div>`;
+                                </div>\`;
                             }).join('')}
                         </div>
                     </div>
@@ -2620,11 +2618,9 @@ function renderInventory(c) {
 // --- Schedules ---
 // --- Schedules & Tasks (محدثة لدعم تحديد اليوم الأسبوعي + وقت بصيغة 12 ساعة) ---
 // --- Schedules & Tasks (محدثة بالفلتر الذكي للأيام الأسبوعية) ---
-        function renderSchedules(c) {
-            // 1. معرفة اسم اليوم الحالي باللغة العربية
+       function renderSchedules(c) {
             const daysArr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
             const todayName = daysArr[new Date().getDay()];
-
             const members = [{k:'husband',n:appState.profiles.husband.name},{k:'wife',n:appState.profiles.wife.name},{k:'aseel',n:appState.profiles.aseel.name},{k:'aser',n:appState.profiles.aser.name}];
             
             c.innerHTML = `
@@ -2668,47 +2664,45 @@ function renderInventory(c) {
                             <ul class="space-y-3 pr-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 ${appState.schedules[m.k].map((s,i) => {
                                     
-                                    // 2. الفلتر الذكي: إخفاء المهام الأسبوعية التي لا توافق اليوم الحالي
                                     if (s.recurrence && s.recurrence.includes('أسبوعياً')) {
-                                        if (!s.recurrence.includes(todayName)) {
-                                            return ''; // لا ترسم هذه المهمة اليوم
-                                        }
+                                        if (!s.recurrence.includes(todayName)) { return ''; }
                                     }
 
-                                    const img = s.img ? `<img src="${window.getSafeImgSrc(s.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'${window.getSafeImgSrc(s.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                    const img = s.img ? \`<img src="\${window.getSafeImgSrc(s.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'\${window.getSafeImgSrc(s.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
+                                    
                                     let fTime = s.time;
                                     if(s.time) {
                                         let [h, min] = s.time.split(':');
                                         let hr = parseInt(h, 10);
                                         let ampm = hr >= 12 ? 'م' : 'ص';
                                         hr = hr % 12 || 12;
-                                        fTime = `${hr}:${min} ${ampm}`;
+                                        fTime = \`\${hr}:\${min} \${ampm}\`;
                                     }
 
-                                    return `
-                                    <li class="bg-white border border-slate-100 p-4 rounded-xl flex flex-col gap-2 shadow-sm transition-all ${s.status==='done'?'opacity-60 bg-emerald-50 border-emerald-200':''}">
+                                    return \`
+                                    <li class="bg-white border border-slate-100 p-4 rounded-xl flex flex-col gap-2 shadow-sm transition-all \${s.status==='done'?'opacity-60 bg-emerald-50 border-emerald-200':''}">
                                         <div class="flex justify-between font-bold text-sm items-start">
-                                            <span class="text-indigo-700 w-fit px-3 flex-shrink-0 bg-indigo-50 text-center py-1 rounded-lg border border-indigo-100" dir="ltr"><i class="fas fa-clock mr-1 text-xs opacity-70"></i> ${fTime}</span>
+                                            <span class="text-indigo-700 w-fit px-3 flex-shrink-0 bg-indigo-50 text-center py-1 rounded-lg border border-indigo-100" dir="ltr"><i class="fas fa-clock mr-1 text-xs opacity-70"></i> \${fTime}</span>
                                             <div class="flex-1 flex flex-col mx-3">
                                                 <div class="flex items-center gap-2 flex-wrap">
-                                                    <span class="${s.status==='done'?'line-through text-slate-500':''} text-base leading-relaxed text-slate-800">${s.text}</span>
-                                                    <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-bold border border-amber-200">${s.stars || 1} ⭐</span>
+                                                    <span class="\${s.status==='done'?'line-through text-slate-500':''} text-base leading-relaxed text-slate-800">\${s.text}</span>
+                                                    <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-bold border border-amber-200">\${s.stars || 1} ⭐</span>
                                                 </div>
-                                                ${img}
+                                                \${img}
                                             </div>
-                                            <span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md h-fit font-bold border border-slate-200">${s.recurrence}</span>
+                                            <span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md h-fit font-bold border border-slate-200">\${s.recurrence}</span>
                                         </div>
                                         <div class="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-50 items-center">
-                                            <button onclick="uploadItemImage('schedules', '${m.k}', ${i})" class="text-teal-600 bg-teal-50 px-3 py-1.5 rounded-lg text-xs transition font-bold hover:bg-teal-100 border border-teal-100"><i class="fas fa-camera"></i> صورة</button>
-                                            <select onchange="updateSchStatus('${m.k}',${i},this.value)" class="text-xs border border-slate-200 p-2 rounded-lg bg-white outline-none flex-1 max-w-[130px] shadow-sm font-bold text-slate-700 cursor-pointer focus:border-indigo-400">
-                                                <option value="pending" ${s.status==='pending'?'selected':''}>قيد الانتظار ⏳</option>
-                                                <option value="done" ${s.status==='done'?'selected':''}>تم الإنجاز ✅</option>
-                                                <option value="postponed" ${s.status==='postponed'?'selected':''}>مؤجل ⏸️</option>
-                                                <option value="cancelled" ${s.status==='cancelled'?'selected':''}>ملغي ❌</option>
+                                            <button onclick="uploadItemImage('schedules', '${m.k}', \${i})" class="text-teal-600 bg-teal-50 px-3 py-1.5 rounded-lg text-xs transition font-bold hover:bg-teal-100 border border-teal-100"><i class="fas fa-camera"></i> صورة</button>
+                                            <select onchange="updateSchStatus('${m.k}',\${i},this.value)" class="text-xs border border-slate-200 p-2 rounded-lg bg-white outline-none flex-1 max-w-[130px] shadow-sm font-bold text-slate-700 cursor-pointer focus:border-indigo-400">
+                                                <option value="pending" \${s.status==='pending'?'selected':''}>قيد الانتظار ⏳</option>
+                                                <option value="done" \${s.status==='done'?'selected':''}>تم الإنجاز ✅</option>
+                                                <option value="postponed" \${s.status==='postponed'?'selected':''}>مؤجل ⏸️</option>
+                                                <option value="cancelled" \${s.status==='cancelled'?'selected':''}>ملغي ❌</option>
                                             </select>
-                                            <button onclick="delSch('${m.k}',${i})" class="text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs transition font-bold border border-red-100"><i class="fas fa-trash"></i></button>
+                                            <button onclick="delSch('${m.k}',\${i})" class="text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs transition font-bold border border-red-100"><i class="fas fa-trash"></i></button>
                                         </div>
-                                    </li>`;
+                                    </li>\`;
                                 }).join('')}
                                 ${appState.schedules[m.k].length === 0 ? '<div class="text-center text-slate-400 text-sm font-bold py-4">لا توجد مهام اليوم.</div>' : ''}
                             </ul>
@@ -3365,17 +3359,13 @@ function renderBedtime(c) {
 
 
 // --- 2. الأهداف ---
-        function renderGoals(c) {
+       function renderGoals(c) {
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
-    <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
-
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
+                        <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${['family', 'husband', 'wife', 'aseel', 'aser'].map(k => {
@@ -3391,18 +3381,18 @@ function renderBedtime(c) {
                                 <ul class="space-y-3">
                                     ${appState.goals[k].map((g, i) => {
                                         const text = typeof g === 'string' ? g : g.text;
-                                        const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
-                                        return `
+                                        const img = typeof g === 'object' && g.img ? \`<img src="\${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'\${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
+                                        return \`
                                         <li class="flex justify-between items-start bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm">
                                             <div class="flex-1 flex flex-col">
-                                                <span class="font-bold text-slate-700">${text}</span>
-                                                ${img}
+                                                <span class="font-bold text-slate-700">\${text}</span>
+                                                \${img}
                                             </div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('goals', '${k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة للهدف"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delGoal('${k}', ${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
+                                                <button onclick="uploadItemImage('goals', '${k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة للهدف"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delGoal('${k}', \${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}
                                 </ul>
                             </div>`;
