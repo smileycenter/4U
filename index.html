@@ -373,38 +373,39 @@ const defaultState = {
         }
 
         // دالة الحفظ الشاملة (تحفظ كل شيء محلياً وسحابياً في نفس اللحظة)
-        async function saveState() { 
-            // 1. حفظ محلي صاروخي لسرعة استجابة البرنامج
+       // ==========================================
+        // ☁️ محرك الحفظ السحابي الشامل (درع السحابة)
+        // ==========================================
+        window.saveState = async function(silent = true) { 
+            // 1. الحفظ المحلي الصاروخي (علشان البرنامج يفضل سريع جداً معاك وميعلقش)
             localStorage.setItem('familyAppSuperMax', JSON.stringify(appState)); 
             
-            // 2. مزامنة فورية ومؤكدة مع سحابة فايربيز (Firestore)
-            if (initFirebase() && db) {
+            // 2. الرفع الفوري والمؤكد على سحابة Firebase (Firestore)
+            if (typeof initFirebase === 'function' && initFirebase() && db) {
                 try {
-                    // تنظيف البيانات من أي شوائب قبل الرفع
+                    // تنظيف الداتا من أي شوائب برمجية قبل الرفع
                     const cleanState = JSON.parse(JSON.stringify(appState)); 
                     
-                    // استخدام await لضمان اكتمال عملية الرفع بنجاح
-                    await db.collection('familyData').doc('appState').set(cleanState);
+                    // رفع وتحديث الداتا على السحابة (استخدام merge يضمن عدم ضياع أي بيانات سابقة)
+                    await db.collection('familyData').doc('appState').set(cleanState, { merge: true });
+                    
+                    if (!silent) {
+                        showModal("تم الحفظ السحابي ☁️✅", "<div class='text-center p-4 font-bold text-emerald-700 leading-loose'>تم رفع وتأمين كل تفصيلة في البرنامج (ميزانية، ملابس، شات، مهام، أهداف) على السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
+                    }
                     console.log("☁️ تم تأكيد الحفظ والمزامنة مع السحابة بنجاح");
                 } catch (e) {
                     console.error("⚠️ خطأ في الحفظ السحابي:", e);
-                    // تنبيه هندسي: قاعدة بيانات Firestore أقصى حجم للملف الواحد فيها 1 ميجا.
-                    // إذا ظهر خطأ هنا مستقبلاً، قد يكون بسبب كثرة الصور المحفوظة (Base64) في المهام.
+                    if (!silent) alert("حدث خطأ في الاتصال بالسحابة، يرجى التأكد من جودة الإنترنت.");
                 }
             }
-        }
+        };
 
-        // تحديث زر الحفظ الإجباري ليعمل بتوافق مع النظام الجديد
+        // زر الحفظ الإجباري للسحابة (الزرار الأخضر العائم في التطبيق)
         window.forceCloudSync = async function() {
             showLoading("جاري رفع وتأمين جميع البيانات على السحابة ☁️...");
-            try {
-                await saveState(); // ننتظر حتى يكتمل الرفع تماماً
-                hideLoading();
-                showModal("تم الحفظ بنجاح ✅", "<div class='text-center p-4 text-lg font-bold text-emerald-700'>تم رفع وتأمين جميع بيانات العائلة والدولاب والمخزن على قاعدة بيانات السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
-            } catch(e) {
-                hideLoading();
-                alert("حدث خطأ أثناء محاولة تأكيد الاتصال بالسحابة.");
-            }
+            // تمرير false يعني إظهار رسالة تأكيد النجاح للمستخدم
+            await window.saveState(false); 
+            hideLoading();
         };
 
 // دالة الجلب والتشغيل (محصنة ومربوطة بحسابك المدمج)
@@ -1570,9 +1571,39 @@ function renderBudget(c) {
 
 
 
-// --- نظام إرفاق الصور للمهام والأهداف والخطط ---
+// ==========================================
+        // ☁️ محرك الرفع الشامل على السحابة (Firebase Storage)
+        // ==========================================
+        window.getSafeImgSrc = function(imgData) {
+            if (!imgData) return '';
+            if (imgData.startsWith('http') || imgData.startsWith('data:')) return imgData;
+            return `data:image/jpeg;base64,${imgData}`;
+        };
+
+        window.uploadImageToCloud = async function(base64Data, folder = 'general') {
+            const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
+            try {
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: "image/jpeg"});
+
+                const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
+                
+                const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': "image/jpeg" } });
+                if(!res.ok) throw new Error("مرفوض من فايربيز");
+                const data = await res.json();
+                if(data.name) return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+                else throw new Error("لم يرجع رابط صحيح");
+            } catch(e) {
+                console.error("فشل الرفع للسحابة:", e); return `data:image/jpeg;base64,${base64Data}`; 
+            }
+        };
+
         let currentImageCallback = null;
-        function triggerItemImageUpload(callback) {
+        window.triggerItemImageUpload = function(callback, folderName = 'general') {
             currentImageCallback = callback;
             let inp = document.getElementById('global-image-upload');
             if(!inp) {
@@ -1582,61 +1613,53 @@ function renderBudget(c) {
                 inp.id = 'global-image-upload';
                 inp.style.display = 'none';
                 document.body.appendChild(inp);
-                inp.onchange = async (e) => {
-                    const f = e.target.files[0];
-                    if(!f) return;
-                    showLoading("جاري ضغط وحفظ المرفق...");
-                    try {
-                        // ضغط الصورة لمقاس 600 بكسل علشان متسحبش مساحة السحابة
-                        const b64 = await compressImageFile(f, 600, 0.6); 
-                        if(currentImageCallback) currentImageCallback(b64);
-                    } catch(err) {
-                        alert("حدث خطأ أثناء رفع الصورة.");
-                    }
-                    hideLoading();
-                    inp.value = ''; // تفريغ الخانة للمرة القادمة
-                };
             }
+            inp.onchange = async (e) => {
+                const f = e.target.files[0];
+                if(!f) return;
+                showLoading("جاري الرفع على السحابة ☁️...");
+                try {
+                    const b64 = await compressImageFile(f, 800, 0.7); 
+                    const fireUrl = await window.uploadImageToCloud(b64, folderName);
+                    if(currentImageCallback) currentImageCallback(fireUrl);
+                } catch(err) {
+                    alert("حدث خطأ أثناء رفع الصورة.");
+                }
+                hideLoading();
+                inp.value = ''; 
+            };
             inp.click();
-        }
+        };
 
         window.uploadItemImage = function(section, keyOrIndex, indexIfKey) {
-            triggerItemImageUpload((b64) => {
+            window.triggerItemImageUpload((url) => {
                 if(section === 'tasks' || section === 'requests' || section === 'goals' || section === 'schedules') {
-                    const k = keyOrIndex;
-                    const i = indexIfKey;
-                    // دعم الداتا القديمة وتحويلها لتدعم الصور
+                    const k = keyOrIndex; const i = indexIfKey;
                     if(typeof appState[section][k][i] === 'string') {
-                        appState[section][k][i] = { text: appState[section][k][i], img: b64 };
+                        appState[section][k][i] = { text: appState[section][k][i], img: url };
                     } else {
-                        appState[section][k][i].img = b64;
+                        appState[section][k][i].img = url;
                     }
                 } else if (section === 'plans') {
-                    const i = keyOrIndex;
-                    appState.futurePlans[i].img = b64;
+                    appState.futurePlans[keyOrIndex].img = url;
                 }
                 saveState();
-                
-                // تحديث الشاشة بعد الرفع
                 if(section === 'tasks' || section === 'requests') navigate('tasks');
                 else if(section === 'goals') navigate('goals');
                 else if(section === 'schedules') navigate('schedules');
                 else if(section === 'plans') navigate('plans');
-            });
+            }, section);
         };
 
-
 // --- Tasks & Requests ---
-        function renderTasks(c) {
+      function renderTasks(c) {
             const members = [{k:'husband',n:appState.profiles.husband.name},{k:'wife',n:appState.profiles.wife.name},{k:'aseel',n:appState.profiles.aseel.name},{k:'aser',n:appState.profiles.aser.name}];
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
-    <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
+                        <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Requests -->
@@ -1647,14 +1670,14 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="req-inp-${m.k}" placeholder="إضافة طلب..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('requests','${m.k}')" class="bg-pink-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.requests[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
-                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
+                                        const img = typeof t === 'object' && t.img ? \`<img src="\${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'\${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">\` : '';
+                                        return \`<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">\${text}</span>\${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('requests', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('requests','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="uploadItemImage('requests', '${m.k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delList('requests','${m.k}',\${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}</ul>
                                 </div>
                             `).join('')}
@@ -1667,14 +1690,14 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="tsk-inp-${m.k}" placeholder="إضافة مهمة..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('tasks','${m.k}')" class="bg-blue-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.tasks[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
-                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
+                                        const img = typeof t === 'object' && t.img ? \`<img src="\${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'\${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">\` : '';
+                                        return \`<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                            <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">\${text}</span>\${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('tasks', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('tasks','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="uploadItemImage('tasks', '${m.k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delList('tasks','${m.k}',\${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}</ul>
                                 </div>
                             `).join('')}
@@ -1708,25 +1731,25 @@ function renderPlans(c) {
                         </div>
                         <div class="space-y-4">
                             ${appState.futurePlans.map((p, i) => {
-                                const img = p.img ? `<img src="data:image/jpeg;base64,${p.img}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'data:image/jpeg;base64,${p.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
-                                return `
+                                const img = p.img ? \`<img src="\${window.getSafeImgSrc(p.img)}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'\${window.getSafeImgSrc(p.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
+                                return \`
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-xl shadow-sm gap-4">
                                     <div class="flex-1 flex flex-col">
-                                        <div class="font-bold text-lg text-slate-800 ${p.status==='done'?'line-through text-slate-400':''}">${p.text}</div>${img}
+                                        <div class="font-bold text-lg text-slate-800 \${p.status==='done'?'line-through text-slate-400':''}">\${p.text}</div>\${img}
                                         <div class="text-xs mt-3 flex flex-wrap gap-2 bg-slate-50 p-2 rounded-lg w-fit border">
-                                            <span class="text-purple-600 font-bold"><i class="fas fa-user-tag"></i> ${p.member}</span>
-                                            <span class="text-amber-600 font-bold bg-amber-100 px-2 rounded-full border border-amber-200">${p.stars || 0} ⭐</span>
-                                            <span class="text-red-500 font-bold"><i class="fas fa-clock"></i> ديدلاين: ${p.deadline||'غير محدد'}</span>
+                                            <span class="text-purple-600 font-bold"><i class="fas fa-user-tag"></i> \${p.member}</span>
+                                            <span class="text-amber-600 font-bold bg-amber-100 px-2 rounded-full border border-amber-200">\${p.stars || 0} ⭐</span>
+                                            <span class="text-red-500 font-bold"><i class="fas fa-clock"></i> ديدلاين: \${p.deadline||'غير محدد'}</span>
                                         </div>
                                     </div>
                                     <div class="flex gap-2 items-center mt-3 md:mt-0 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0">
-                                        <button onclick="uploadItemImage('plans', ${i})" class="text-teal-600 bg-teal-50 px-3 py-2 rounded-lg hover:bg-teal-100 transition font-bold text-sm"><i class="fas fa-camera"></i> صورة</button>
-                                        <select onchange="window.updatePlanStatus(${i}, this.value)" class="border border-slate-200 p-2 rounded-lg text-sm bg-white outline-none cursor-pointer">
-                                            <option value="pending" ${p.status==='pending'?'selected':''}>قيد التنفيذ</option><option value="done" ${p.status==='done'?'selected':''}>تم التنفيذ</option><option value="postponed" ${p.status==='postponed'?'selected':''}>مؤجلة</option><option value="cancelled" ${p.status==='cancelled'?'selected':''}>لم تنفذ</option>
+                                        <button onclick="uploadItemImage('plans', \${i})" class="text-teal-600 bg-teal-50 px-3 py-2 rounded-lg hover:bg-teal-100 transition font-bold text-sm"><i class="fas fa-camera"></i> صورة</button>
+                                        <select onchange="window.updatePlanStatus(\${i}, this.value)" class="border border-slate-200 p-2 rounded-lg text-sm bg-white outline-none cursor-pointer">
+                                            <option value="pending" \${p.status==='pending'?'selected':''}>قيد التنفيذ</option><option value="done" \${p.status==='done'?'selected':''}>تم التنفيذ</option><option value="postponed" \${p.status==='postponed'?'selected':''}>مؤجلة</option><option value="cancelled" \${p.status==='cancelled'?'selected':''}>لم تنفذ</option>
                                         </select>
-                                        <button onclick="window.delPlan(${i})" class="text-red-500 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                                        <button onclick="window.delPlan(\${i})" class="text-red-500 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
                                     </div>
-                                </div>`;
+                                </div>\`;
                             }).join('')}
                         </div>
                     </div>
@@ -2050,7 +2073,7 @@ function renderHouseMap(c) {
             });
 
             // دالة مساعدة لعمل صورة مصغرة قابلة للضغط
-            const thumb = (b64) => b64 ? `<img src="data:image/jpeg;base64,${b64}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+            const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'${window.getSafeImgSrc(imgData)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
 
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20">
@@ -2201,13 +2224,13 @@ function renderHouseMap(c) {
         // =====================================
 
         // 1. رفع الصور المصغرة لمستويات الخريطة (مكان، وحدة، رف)
-        window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
-            triggerItemImageUpload((b64) => {
-                if(level === 'loc') appState.houseMap.locations[lIdx].img = b64;
-                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = b64;
-                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = b64;
+       window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
+            window.triggerItemImageUpload((url) => {
+                if(level === 'loc') appState.houseMap.locations[lIdx].img = url;
+                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = url;
+                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = url;
                 saveState(); navigate('housemap');
-            });
+            }, 'housemap');
         };
 
         // 2. تدريب العقل (سجل الذكاء)
@@ -2595,11 +2618,9 @@ function renderInventory(c) {
 // --- Schedules ---
 // --- Schedules & Tasks (محدثة لدعم تحديد اليوم الأسبوعي + وقت بصيغة 12 ساعة) ---
 // --- Schedules & Tasks (محدثة بالفلتر الذكي للأيام الأسبوعية) ---
-        function renderSchedules(c) {
-            // 1. معرفة اسم اليوم الحالي باللغة العربية
+       function renderSchedules(c) {
             const daysArr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
             const todayName = daysArr[new Date().getDay()];
-
             const members = [{k:'husband',n:appState.profiles.husband.name},{k:'wife',n:appState.profiles.wife.name},{k:'aseel',n:appState.profiles.aseel.name},{k:'aser',n:appState.profiles.aser.name}];
             
             c.innerHTML = `
@@ -2643,14 +2664,11 @@ function renderInventory(c) {
                             <ul class="space-y-3 pr-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 ${appState.schedules[m.k].map((s,i) => {
                                     
-                                    // 2. الفلتر الذكي: إخفاء المهام الأسبوعية التي لا توافق اليوم الحالي
                                     if (s.recurrence && s.recurrence.includes('أسبوعياً')) {
-                                        if (!s.recurrence.includes(todayName)) {
-                                            return ''; // لا ترسم هذه المهمة اليوم
-                                        }
+                                        if (!s.recurrence.includes(todayName)) { return ''; }
                                     }
 
-                                    const img = s.img ? `<img src="data:image/jpeg;base64,${s.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'data:image/jpeg;base64,${s.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                    const img = s.img ? \`<img src="\${window.getSafeImgSrc(s.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'\${window.getSafeImgSrc(s.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
                                     
                                     let fTime = s.time;
                                     if(s.time) {
@@ -2658,33 +2676,33 @@ function renderInventory(c) {
                                         let hr = parseInt(h, 10);
                                         let ampm = hr >= 12 ? 'م' : 'ص';
                                         hr = hr % 12 || 12;
-                                        fTime = `${hr}:${min} ${ampm}`;
+                                        fTime = \`\${hr}:\${min} \${ampm}\`;
                                     }
 
-                                    return `
-                                    <li class="bg-white border border-slate-100 p-4 rounded-xl flex flex-col gap-2 shadow-sm transition-all ${s.status==='done'?'opacity-60 bg-emerald-50 border-emerald-200':''}">
+                                    return \`
+                                    <li class="bg-white border border-slate-100 p-4 rounded-xl flex flex-col gap-2 shadow-sm transition-all \${s.status==='done'?'opacity-60 bg-emerald-50 border-emerald-200':''}">
                                         <div class="flex justify-between font-bold text-sm items-start">
-                                            <span class="text-indigo-700 w-fit px-3 flex-shrink-0 bg-indigo-50 text-center py-1 rounded-lg border border-indigo-100" dir="ltr"><i class="fas fa-clock mr-1 text-xs opacity-70"></i> ${fTime}</span>
+                                            <span class="text-indigo-700 w-fit px-3 flex-shrink-0 bg-indigo-50 text-center py-1 rounded-lg border border-indigo-100" dir="ltr"><i class="fas fa-clock mr-1 text-xs opacity-70"></i> \${fTime}</span>
                                             <div class="flex-1 flex flex-col mx-3">
                                                 <div class="flex items-center gap-2 flex-wrap">
-                                                    <span class="${s.status==='done'?'line-through text-slate-500':''} text-base leading-relaxed text-slate-800">${s.text}</span>
-                                                    <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-bold border border-amber-200">${s.stars || 1} ⭐</span>
+                                                    <span class="\${s.status==='done'?'line-through text-slate-500':''} text-base leading-relaxed text-slate-800">\${s.text}</span>
+                                                    <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-bold border border-amber-200">\${s.stars || 1} ⭐</span>
                                                 </div>
-                                                ${img}
+                                                \${img}
                                             </div>
-                                            <span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md h-fit font-bold border border-slate-200">${s.recurrence}</span>
+                                            <span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md h-fit font-bold border border-slate-200">\${s.recurrence}</span>
                                         </div>
                                         <div class="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-50 items-center">
-                                            <button onclick="uploadItemImage('schedules', '${m.k}', ${i})" class="text-teal-600 bg-teal-50 px-3 py-1.5 rounded-lg text-xs transition font-bold hover:bg-teal-100 border border-teal-100"><i class="fas fa-camera"></i> صورة</button>
-                                            <select onchange="updateSchStatus('${m.k}',${i},this.value)" class="text-xs border border-slate-200 p-2 rounded-lg bg-white outline-none flex-1 max-w-[130px] shadow-sm font-bold text-slate-700 cursor-pointer focus:border-indigo-400">
-                                                <option value="pending" ${s.status==='pending'?'selected':''}>قيد الانتظار ⏳</option>
-                                                <option value="done" ${s.status==='done'?'selected':''}>تم الإنجاز ✅</option>
-                                                <option value="postponed" ${s.status==='postponed'?'selected':''}>مؤجل ⏸️</option>
-                                                <option value="cancelled" ${s.status==='cancelled'?'selected':''}>ملغي ❌</option>
+                                            <button onclick="uploadItemImage('schedules', '${m.k}', \${i})" class="text-teal-600 bg-teal-50 px-3 py-1.5 rounded-lg text-xs transition font-bold hover:bg-teal-100 border border-teal-100"><i class="fas fa-camera"></i> صورة</button>
+                                            <select onchange="updateSchStatus('${m.k}',\${i},this.value)" class="text-xs border border-slate-200 p-2 rounded-lg bg-white outline-none flex-1 max-w-[130px] shadow-sm font-bold text-slate-700 cursor-pointer focus:border-indigo-400">
+                                                <option value="pending" \${s.status==='pending'?'selected':''}>قيد الانتظار ⏳</option>
+                                                <option value="done" \${s.status==='done'?'selected':''}>تم الإنجاز ✅</option>
+                                                <option value="postponed" \${s.status==='postponed'?'selected':''}>مؤجل ⏸️</option>
+                                                <option value="cancelled" \${s.status==='cancelled'?'selected':''}>ملغي ❌</option>
                                             </select>
-                                            <button onclick="delSch('${m.k}',${i})" class="text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs transition font-bold border border-red-100"><i class="fas fa-trash"></i></button>
+                                            <button onclick="delSch('${m.k}',\${i})" class="text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs transition font-bold border border-red-100"><i class="fas fa-trash"></i></button>
                                         </div>
-                                    </li>`;
+                                    </li>\`;
                                 }).join('')}
                                 ${appState.schedules[m.k].length === 0 ? '<div class="text-center text-slate-400 text-sm font-bold py-4">لا توجد مهام اليوم.</div>' : ''}
                             </ul>
@@ -3341,17 +3359,13 @@ function renderBedtime(c) {
 
 
 // --- 2. الأهداف ---
-        function renderGoals(c) {
+       function renderGoals(c) {
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
-    <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
-
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
+                        <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${['family', 'husband', 'wife', 'aseel', 'aser'].map(k => {
@@ -3367,18 +3381,18 @@ function renderBedtime(c) {
                                 <ul class="space-y-3">
                                     ${appState.goals[k].map((g, i) => {
                                         const text = typeof g === 'string' ? g : g.text;
-                                        const img = typeof g === 'object' && g.img ? `<img src="data:image/jpeg;base64,${g.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'data:image/jpeg;base64,${g.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
-                                        return `
+                                        const img = typeof g === 'object' && g.img ? \`<img src="\${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'\${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">\` : '';
+                                        return \`
                                         <li class="flex justify-between items-start bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm">
                                             <div class="flex-1 flex flex-col">
-                                                <span class="font-bold text-slate-700">${text}</span>
-                                                ${img}
+                                                <span class="font-bold text-slate-700">\${text}</span>
+                                                \${img}
                                             </div>
                                             <div class="flex gap-3 mt-1 mr-2">
-                                                <button onclick="uploadItemImage('goals', '${k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة للهدف"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delGoal('${k}', ${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
+                                                <button onclick="uploadItemImage('goals', '${k}', \${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة للهدف"><i class="fas fa-camera"></i></button>
+                                                <button onclick="delGoal('${k}', \${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
                                             </div>
-                                        </li>`;
+                                        </li>\`;
                                     }).join('')}
                                 </ul>
                             </div>`;
@@ -3439,7 +3453,7 @@ function renderBedtime(c) {
                                     // لو فيه صور متعددة
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
+                                            const safeImg = window.getSafeImgSrc(imgData);
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
@@ -3868,96 +3882,67 @@ function renderBedtime(c) {
         // =====================================
         // رفع وحذف الصور المتعددة للتمارين
         // =====================================
-        window.handleWorkoutImgUpload = async function(event, uniqueId) {
+     window.handleWorkoutImgUpload = async function(event, uniqueId) {
             const files = event.target.files;
             if(!files.length) return;
-            
             const preview = document.getElementById(`wo-preview-${uniqueId}`);
             if(!window.tempWorkoutImages[uniqueId]) window.tempWorkoutImages[uniqueId] = [];
-            
-            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; // مسح الرسالة الافتراضية
+            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; 
 
             const loaderId = `loader-${Date.now()}`;
             preview.insertAdjacentHTML('beforeend', `<div id="${loaderId}" class="w-12 h-12 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-slate-400 text-lg"></i></div>`);
 
             for(let i=0; i<files.length; i++) {
                 try {
-                    const b64 = await compressImageFile(files[i], 800, 0.7); // ضغط الصورة 
-                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
+                    const b64 = await compressImageFile(files[i], 800, 0.7); 
+                    const fireUrl = await window.uploadImageToCloud(b64, 'workouts');
+                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
                     window.tempWorkoutImages[uniqueId].push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                     thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                            <i class="fas fa-times text-[10px]"></i>
-                        </button>
+                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
                     `;
                     preview.appendChild(thumbDiv);
-                } catch(e) {
-                    alert("حدث خطأ أثناء معالجة إحدى صور التمرين.");
-                }
+                } catch(e) { alert("حدث خطأ أثناء معالجة الصورة."); }
             }
-            
             const loader = document.getElementById(loaderId);
             if(loader) loader.remove();
             event.target.value = ''; 
         };
 
-        window.removeWorkoutImage = function(uniqueId, imgId) {
-            if(window.tempWorkoutImages[uniqueId]) {
-                window.tempWorkoutImages[uniqueId] = window.tempWorkoutImages[uniqueId].filter(img => img.id !== imgId);
-            }
-            const thumb = document.getElementById(`wo-thumb-${uniqueId}-${imgId}`);
-            if(thumb) thumb.remove();
-            
-            const preview = document.getElementById(`wo-preview-${uniqueId}`);
-            if(window.tempWorkoutImages[uniqueId].length === 0) {
-                preview.innerHTML = '<span class="text-[10px] text-slate-400 mx-auto font-bold">لم يتم إضافة صور (تظهر الثامبنايلز هنا)</span>';
-            }
-        };
-
-        // =====================================
-        // رفع وحذف صور الساعة
-        // =====================================
         window.handleWatchImagesUpload = async function(event) {
             const files = event.target.files;
             if(!files.length) return;
             const container = document.getElementById('watch-thumbnails-container');
             if(window.tempWatchImages.length === 0) container.innerHTML = ''; 
 
+            showLoading("جاري الرفع للسحابة...");
             for(let i=0; i<files.length; i++) {
                 try {
                     const b64 = await compressImageFile(files[i], 800, 0.7);
-                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
+                    const fireUrl = await window.uploadImageToCloud(b64, 'watch_stats');
+                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
                     window.tempWatchImages.push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-20 h-20 rounded-xl overflow-hidden border border-blue-200 shadow-sm animate-fade-in group";
                     thumbDiv.id = `watch-thumb-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                            <i class="fas fa-times text-xs"></i>
-                        </button>
+                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-xs"></i></button>
                     `;
                     container.appendChild(thumbDiv);
                 } catch(e) { console.error("Error processing watch image"); }
             }
+            hideLoading();
             event.target.value = '';
         };
 
-        window.removeWatchImage = function(imgId) {
-            window.tempWatchImages = window.tempWatchImages.filter(img => img.id !== imgId);
-            const thumb = document.getElementById(`watch-thumb-${imgId}`);
-            if(thumb) thumb.remove();
-            if(window.tempWatchImages.length === 0) {
-                document.getElementById('watch-thumbnails-container').innerHTML = '<span class="text-xs text-slate-400 my-auto mx-auto font-bold">الصور المرفوعة ستظهر هنا</span>';
-            }
-        };
-
+        
         // ==========================================
         // حفظ اليومية واستعراضها (محدثة لدعم زرار الراحة)
         // ==========================================
@@ -7623,7 +7608,7 @@ ${cat.items.map(item => {
                                                 thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                                                 thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                                                 thumbDiv.innerHTML = `
-                                                    <img src="data:image/jpeg;base64,${imgObj.base64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${imgObj.base64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                    <img src="${window.getSafeImgSrc(imgObj.base64)}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${window.getSafeImgSrc(imgObj.base64)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
                                                     <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id}); window.saveWorkoutDraft();" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
                                                         <i class="fas fa-times text-[10px]"></i>
                                                     </button>
@@ -8237,7 +8222,7 @@ ${cat.items.map(item => {
                                     let imgHtml = '<div class="w-12 h-12 rounded bg-slate-200 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fas fa-image"></i></div>';
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
+                                   const safeImg = window.getSafeImgSrc(imgData);
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
@@ -8262,7 +8247,7 @@ ${cat.items.map(item => {
                         let watchImgsHtml = '';
                         if (log.watchImages && log.watchImages.length > 0) {
                             let wImgs = log.watchImages.map(img => {
-                                const safeImg = `data:image/jpeg;base64,${img}`;
+                                const safeImg = window.getSafeImgSrc(img);
                                 return `<img src="${safeImg}" class="w-16 h-16 rounded-lg object-cover cursor-pointer border shadow-sm hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                             }).join('');
                             watchImgsHtml = `<div class="flex flex-wrap gap-2 mt-2">${wImgs}</div>`;
