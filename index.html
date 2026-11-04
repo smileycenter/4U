@@ -373,38 +373,39 @@ const defaultState = {
         }
 
         // دالة الحفظ الشاملة (تحفظ كل شيء محلياً وسحابياً في نفس اللحظة)
-        async function saveState() { 
-            // 1. حفظ محلي صاروخي لسرعة استجابة البرنامج
+       // ==========================================
+        // ☁️ محرك الحفظ السحابي الشامل (درع السحابة)
+        // ==========================================
+        window.saveState = async function(silent = true) { 
+            // 1. الحفظ المحلي الصاروخي (علشان البرنامج يفضل سريع جداً معاك وميعلقش)
             localStorage.setItem('familyAppSuperMax', JSON.stringify(appState)); 
             
-            // 2. مزامنة فورية ومؤكدة مع سحابة فايربيز (Firestore)
-            if (initFirebase() && db) {
+            // 2. الرفع الفوري والمؤكد على سحابة Firebase (Firestore)
+            if (typeof initFirebase === 'function' && initFirebase() && db) {
                 try {
-                    // تنظيف البيانات من أي شوائب قبل الرفع
+                    // تنظيف الداتا من أي شوائب برمجية قبل الرفع
                     const cleanState = JSON.parse(JSON.stringify(appState)); 
                     
-                    // استخدام await لضمان اكتمال عملية الرفع بنجاح
-                    await db.collection('familyData').doc('appState').set(cleanState);
+                    // رفع وتحديث الداتا على السحابة (استخدام merge يضمن عدم ضياع أي بيانات سابقة)
+                    await db.collection('familyData').doc('appState').set(cleanState, { merge: true });
+                    
+                    if (!silent) {
+                        showModal("تم الحفظ السحابي ☁️✅", "<div class='text-center p-4 font-bold text-emerald-700 leading-loose'>تم رفع وتأمين كل تفصيلة في البرنامج (ميزانية، ملابس، شات، مهام، أهداف) على السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
+                    }
                     console.log("☁️ تم تأكيد الحفظ والمزامنة مع السحابة بنجاح");
                 } catch (e) {
                     console.error("⚠️ خطأ في الحفظ السحابي:", e);
-                    // تنبيه هندسي: قاعدة بيانات Firestore أقصى حجم للملف الواحد فيها 1 ميجا.
-                    // إذا ظهر خطأ هنا مستقبلاً، قد يكون بسبب كثرة الصور المحفوظة (Base64) في المهام.
+                    if (!silent) alert("حدث خطأ في الاتصال بالسحابة، يرجى التأكد من جودة الإنترنت.");
                 }
             }
-        }
+        };
 
-        // تحديث زر الحفظ الإجباري ليعمل بتوافق مع النظام الجديد
+        // زر الحفظ الإجباري للسحابة (الزرار الأخضر العائم في التطبيق)
         window.forceCloudSync = async function() {
             showLoading("جاري رفع وتأمين جميع البيانات على السحابة ☁️...");
-            try {
-                await saveState(); // ننتظر حتى يكتمل الرفع تماماً
-                hideLoading();
-                showModal("تم الحفظ بنجاح ✅", "<div class='text-center p-4 text-lg font-bold text-emerald-700'>تم رفع وتأمين جميع بيانات العائلة والدولاب والمخزن على قاعدة بيانات السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
-            } catch(e) {
-                hideLoading();
-                alert("حدث خطأ أثناء محاولة تأكيد الاتصال بالسحابة.");
-            }
+            // تمرير false يعني إظهار رسالة تأكيد النجاح للمستخدم
+            await window.saveState(false); 
+            hideLoading();
         };
 
 // دالة الجلب والتشغيل (محصنة ومربوطة بحسابك المدمج)
