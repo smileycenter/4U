@@ -337,14 +337,13 @@ const defaultState = {
 // --- إعدادات الفايربيز المدمجة الخاصة بك (Firestore + Storage) ---
         const firebaseConfig = {
             apiKey: "AIzaSyCziax7-PzItRrkdsLZ6ks2vewDVtE5lck",
-            authDomain: "home2-8993a.firebaseapp.com",
-            projectId: "home2-8993a",
-            storageBucket: "home2-8993a.firebasestorage.app",
+            authDomain: "home-9ba3b.firebaseapp.com",
+            projectId: "home-9ba3b",
+            storageBucket: "home-9ba3b.firebasestorage.app",
             messagingSenderId: "345083767710",
             appId: "1:345083767710:web:841f7cbbbb6c39e432c48f",
             measurementId: "G-X5CVMJQ8F3"
-        };
-        
+        };        
         let appState = JSON.parse(JSON.stringify(defaultState)); 
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
@@ -373,40 +372,40 @@ const defaultState = {
         }
 
         // دالة الحفظ الشاملة (تحفظ كل شيء محلياً وسحابياً في نفس اللحظة)
-        async function saveState() { 
-            // 1. حفظ محلي صاروخي لسرعة استجابة البرنامج
+// ==========================================
+        // ☁️ محرك الحفظ السحابي الشامل (درع السحابة)
+        // ==========================================
+        window.saveState = async function(silent = true) { 
+            // 1. الحفظ المحلي الصاروخي (علشان البرنامج يفضل سريع جداً معاك وميعلقش)
             localStorage.setItem('familyAppSuperMax', JSON.stringify(appState)); 
             
-            // 2. مزامنة فورية ومؤكدة مع سحابة فايربيز (Firestore)
-            if (initFirebase() && db) {
+            // 2. الرفع الفوري والمؤكد على سحابة Firebase (Firestore)
+            if (typeof initFirebase === 'function' && initFirebase() && db) {
                 try {
-                    // تنظيف البيانات من أي شوائب قبل الرفع
+                    // تنظيف الداتا من أي شوائب برمجية قبل الرفع
                     const cleanState = JSON.parse(JSON.stringify(appState)); 
                     
-                    // استخدام await لضمان اكتمال عملية الرفع بنجاح
-                    await db.collection('familyData').doc('appState').set(cleanState);
+                    // رفع وتحديث الداتا على السحابة (استخدام merge يضمن عدم ضياع أي بيانات سابقة)
+                    await db.collection('familyData').doc('appState').set(cleanState, { merge: true });
+                    
+                    if (!silent) {
+                        showModal("تم الحفظ السحابي ☁️✅", "<div class='text-center p-4 font-bold text-emerald-700 leading-loose'>تم رفع وتأمين كل تفصيلة في البرنامج (ميزانية، ملابس، شات، مهام، أهداف) على السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
+                    }
                     console.log("☁️ تم تأكيد الحفظ والمزامنة مع السحابة بنجاح");
                 } catch (e) {
                     console.error("⚠️ خطأ في الحفظ السحابي:", e);
-                    // تنبيه هندسي: قاعدة بيانات Firestore أقصى حجم للملف الواحد فيها 1 ميجا.
-                    // إذا ظهر خطأ هنا مستقبلاً، قد يكون بسبب كثرة الصور المحفوظة (Base64) في المهام.
+                    if (!silent) alert("حدث خطأ في الاتصال بالسحابة، يرجى التأكد من جودة الإنترنت.");
                 }
-            }
-        }
-
-        // تحديث زر الحفظ الإجباري ليعمل بتوافق مع النظام الجديد
-        window.forceCloudSync = async function() {
-            showLoading("جاري رفع وتأمين جميع البيانات على السحابة ☁️...");
-            try {
-                await saveState(); // ننتظر حتى يكتمل الرفع تماماً
-                hideLoading();
-                showModal("تم الحفظ بنجاح ✅", "<div class='text-center p-4 text-lg font-bold text-emerald-700'>تم رفع وتأمين جميع بيانات العائلة والدولاب والمخزن على قاعدة بيانات السحابة بنجاح!</div>", [{text: "ممتاز", class: "bg-emerald-600 text-white"}]);
-            } catch(e) {
-                hideLoading();
-                alert("حدث خطأ أثناء محاولة تأكيد الاتصال بالسحابة.");
             }
         };
 
+        // زر الحفظ الإجباري للسحابة (الزرار الأخضر العائم في التطبيق)
+        window.forceCloudSync = async function() {
+            showLoading("جاري رفع وتأمين جميع البيانات على السحابة ☁️...");
+            // تمرير false يعني إظهار رسالة تأكيد النجاح للمستخدم
+            await window.saveState(false); 
+            hideLoading();
+        };
 // دالة الجلب والتشغيل (محصنة ومربوطة بحسابك المدمج)
         async function initApp() {
             showLoading("جاري جلب ومزامنة بيانات العائلة من سحابتك الخاصة ☁️...");
@@ -1570,9 +1569,65 @@ function renderBudget(c) {
 
 
 
-// --- نظام إرفاق الصور للمهام والأهداف والخطط ---
+// ==========================================
+        // ☁️ محرك الرفع الشامل على السحابة (Firebase Storage)
+        // ==========================================
+        window.getSafeImgSrc = function(imgData) {
+            if (!imgData) return '';
+            if (imgData.startsWith('http') || imgData.startsWith('data:')) return imgData;
+            return `data:image/jpeg;base64,${imgData}`;
+        };
+
+        window.uploadImageToCloud = async function(base64Data, folder = 'general') {
+            const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
+            try {
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: "image/jpeg"});
+
+                const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
+                
+                const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': "image/jpeg" } });
+                if(!res.ok) throw new Error("مرفوض من فايربيز");
+                const data = await res.json();
+                if(data.name) return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
+                else throw new Error("لم يرجع رابط صحيح");
+            } catch(e) {
+                console.error("فشل الرفع للسحابة:", e); return `data:image/jpeg;base64,${base64Data}`; 
+            }
+        };
+
+
+
+// ==========================================
+        // 🗑️ محرك الحذف الشامل من السحابة (Firebase Storage)
+        // ==========================================
+        window.deleteImageFromCloud = async function(url) {
+            // لو مفيش رابط أو الرابط مش بتاع فايربيز، يتجاهل الحذف
+            if (!url || !url.includes('firebasestorage.googleapis.com')) return;
+            try {
+                const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
+                const startIndex = url.indexOf('/o/') + 3;
+                const endIndex = url.indexOf('?');
+                
+                // استخراج مسار الملف داخل السحابة
+                const encodedPath = endIndex > -1 ? url.substring(startIndex, endIndex) : url.substring(startIndex);
+                const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodedPath}`;
+                
+                // إرسال أمر الحذف للسحابة
+                await fetch(deleteUrl, { method: 'DELETE' });
+                console.log("✅ تم الحذف من السحابة بنجاح:", decodeURIComponent(encodedPath));
+            } catch (e) {
+                console.error("⚠️ فشل الحذف من السحابة:", e);
+            }
+        };
+
+
         let currentImageCallback = null;
-        function triggerItemImageUpload(callback) {
+        window.triggerItemImageUpload = function(callback, folderName = 'general') {
             currentImageCallback = callback;
             let inp = document.getElementById('global-image-upload');
             if(!inp) {
@@ -1582,48 +1637,44 @@ function renderBudget(c) {
                 inp.id = 'global-image-upload';
                 inp.style.display = 'none';
                 document.body.appendChild(inp);
-                inp.onchange = async (e) => {
-                    const f = e.target.files[0];
-                    if(!f) return;
-                    showLoading("جاري ضغط وحفظ المرفق...");
-                    try {
-                        // ضغط الصورة لمقاس 600 بكسل علشان متسحبش مساحة السحابة
-                        const b64 = await compressImageFile(f, 600, 0.6); 
-                        if(currentImageCallback) currentImageCallback(b64);
-                    } catch(err) {
-                        alert("حدث خطأ أثناء رفع الصورة.");
-                    }
-                    hideLoading();
-                    inp.value = ''; // تفريغ الخانة للمرة القادمة
-                };
             }
+            inp.onchange = async (e) => {
+                const f = e.target.files[0];
+                if(!f) return;
+                showLoading("جاري الرفع على السحابة ☁️...");
+                try {
+                    const b64 = await compressImageFile(f, 800, 0.7); 
+                    const fireUrl = await window.uploadImageToCloud(b64, folderName);
+                    if(currentImageCallback) currentImageCallback(fireUrl);
+                } catch(err) {
+                    alert("حدث خطأ أثناء رفع الصورة.");
+                }
+                hideLoading();
+                inp.value = ''; 
+            };
             inp.click();
-        }
+        };
 
         window.uploadItemImage = function(section, keyOrIndex, indexIfKey) {
-            triggerItemImageUpload((b64) => {
+            window.triggerItemImageUpload((url) => {
                 if(section === 'tasks' || section === 'requests' || section === 'goals' || section === 'schedules') {
-                    const k = keyOrIndex;
-                    const i = indexIfKey;
-                    // دعم الداتا القديمة وتحويلها لتدعم الصور
+                    const k = keyOrIndex; const i = indexIfKey;
                     if(typeof appState[section][k][i] === 'string') {
-                        appState[section][k][i] = { text: appState[section][k][i], img: b64 };
+                        appState[section][k][i] = { text: appState[section][k][i], img: url };
                     } else {
-                        appState[section][k][i].img = b64;
+                        appState[section][k][i].img = url;
                     }
                 } else if (section === 'plans') {
-                    const i = keyOrIndex;
-                    appState.futurePlans[i].img = b64;
+                    appState.futurePlans[keyOrIndex].img = url;
                 }
                 saveState();
-                
-                // تحديث الشاشة بعد الرفع
                 if(section === 'tasks' || section === 'requests') navigate('tasks');
                 else if(section === 'goals') navigate('goals');
                 else if(section === 'schedules') navigate('schedules');
                 else if(section === 'plans') navigate('plans');
-            });
+            }, section);
         };
+
 
 
 // --- Tasks & Requests ---
@@ -1647,8 +1698,9 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="req-inp-${m.k}" placeholder="إضافة طلب..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('requests','${m.k}')" class="bg-pink-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.requests[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+                                        
+return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
                                             <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
                                                 <button onclick="uploadItemImage('requests', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
@@ -1667,7 +1719,8 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="tsk-inp-${m.k}" placeholder="إضافة مهمة..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('tasks','${m.k}')" class="bg-blue-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.tasks[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+
                                         return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
                                             <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
@@ -1684,7 +1737,11 @@ function renderBudget(c) {
             `;
         }
         function addList(type, k){ const v=document.getElementById(`${type==='tasks'?'tsk':'req'}-inp-${k}`).value; if(v){appState[type][k].push({text: v}); saveState(); navigate('tasks');} }
-        function delList(type, k, i){ appState[type][k].splice(i,1); saveState(); navigate('tasks'); }
+        window.delList = function(type, k, i) { 
+            const item = appState[type][k][i];
+            if (typeof item === 'object' && item.img) window.deleteImageFromCloud(item.img);
+            appState[type][k].splice(i,1); saveState(); navigate('tasks'); 
+        };
 
 
 
@@ -1708,7 +1765,7 @@ function renderPlans(c) {
                         </div>
                         <div class="space-y-4">
                             ${appState.futurePlans.map((p, i) => {
-                                const img = p.img ? `<img src="data:image/jpeg;base64,${p.img}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'data:image/jpeg;base64,${p.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+const img = p.img ? `<img src="${window.getSafeImgSrc(p.img)}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'${window.getSafeImgSrc(p.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
                                 return `
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-xl shadow-sm gap-4">
                                     <div class="flex-1 flex flex-col">
@@ -1752,7 +1809,11 @@ function renderPlans(c) {
             }
             p.status = st; saveState(); navigate('plans'); 
         };
-        window.delPlan = function(i) { appState.futurePlans.splice(i,1); saveState(); navigate('plans'); };
+        window.delPlan = function(i) { 
+            const p = appState.futurePlans[i];
+            if (p && p.img) window.deleteImageFromCloud(p.img);
+            appState.futurePlans.splice(i,1); saveState(); navigate('plans'); 
+        };
 
 
 // ==========================================
@@ -2050,8 +2111,7 @@ function renderHouseMap(c) {
             });
 
             // دالة مساعدة لعمل صورة مصغرة قابلة للضغط
-            const thumb = (b64) => b64 ? `<img src="data:image/jpeg;base64,${b64}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
-
+const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'${window.getSafeImgSrc(imgData)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20">
                     <div class="flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4">
@@ -2201,15 +2261,14 @@ function renderHouseMap(c) {
         // =====================================
 
         // 1. رفع الصور المصغرة لمستويات الخريطة (مكان، وحدة، رف)
-        window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
-            triggerItemImageUpload((b64) => {
-                if(level === 'loc') appState.houseMap.locations[lIdx].img = b64;
-                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = b64;
-                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = b64;
+window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
+            window.triggerItemImageUpload((url) => {
+                if(level === 'loc') appState.houseMap.locations[lIdx].img = url;
+                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = url;
+                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = url;
                 saveState(); navigate('housemap');
-            });
+            }, 'housemap');
         };
-
         // 2. تدريب العقل (سجل الذكاء)
         window.trainHouseMapAI = async function() {
             showLoading("جاري جمع بيانات وصور المنزل وتدريب الذكاء الاصطناعي...");
@@ -2332,14 +2391,49 @@ function renderHouseMap(c) {
         };
 
         window.addManualLocation = function() { showModal("إضافة مكان 🏠", `<div dir="rtl"><div><label>الاسم:</label><input type="text" id="add-loc-name" class="w-full border p-3 rounded bg-slate-50 mt-1"></div></div>`, [{text: "إلغاء", class: "bg-slate-200 text-slate-800"}, {text: "إضافة", class: "bg-blue-600 text-white", onClick: () => { const n = document.getElementById('add-loc-name').value.trim(); if(n) { appState.houseMap.locations.unshift({ id: Date.now(), name: n, desc: '', storageUnits: [] }); saveState(); navigate('housemap'); } }}]); };
-        window.deleteMapLocation = function(id) { if(confirm("مسح المكان بمحتوياته؟")) { appState.houseMap.locations = appState.houseMap.locations.filter(l => l.id !== id); saveState(); navigate('housemap'); } };
+
+
+window.deleteMapLocation = function(id) { 
+            if(confirm("مسح المكان بمحتوياته والصور الخاصة به من السحابة؟")) { 
+                const loc = appState.houseMap.locations.find(l => l.id === id);
+                if(loc) {
+                    if(loc.img) window.deleteImageFromCloud(loc.img);
+                    (loc.storageUnits||[]).forEach(u => {
+                        if(u.img) window.deleteImageFromCloud(u.img);
+                        (u.shelves||[]).forEach(s => { if(s.img) window.deleteImageFromCloud(s.img); });
+                    });
+                }
+                appState.houseMap.locations = appState.houseMap.locations.filter(l => l.id !== id); 
+                saveState(); navigate('housemap'); 
+            } 
+        };
         window.editMapLocation = function(locIdx) { const loc = appState.houseMap.locations[locIdx]; showModal("تعديل المكان 🏠", `<div dir="rtl"><div><label>الاسم:</label><input type="text" id="edit-loc-name" value="${loc.name}" class="w-full border p-3 rounded bg-slate-50 mt-1"></div></div>`, [{text: "إلغاء", class: "bg-slate-200"}, {text: "حفظ", class: "bg-teal-600 text-white", onClick: () => { const n = document.getElementById('edit-loc-name').value.trim(); if(n) { appState.houseMap.locations[locIdx].name = n; saveState(); navigate('housemap'); } }}]); };
         window.addManualStorageUnit = function(locIdx) { showModal("إضافة وحدة 🗄️", `<div dir="rtl"><label>اسم الوحدة (مثال: دولاب):</label><input type="text" id="add-unit-name" class="w-full border p-3 rounded bg-slate-50 mt-1"></div>`, [{text: "إلغاء", class: "bg-slate-200"}, {text: "إضافة", class: "bg-teal-600 text-white", onClick: () => { const n = document.getElementById('add-unit-name').value.trim(); if(n) { appState.houseMap.locations[locIdx].storageUnits.push({ unitName: n, shelves: [] }); saveState(); navigate('housemap'); } }}]); };
         window.editStorageUnit = function(locIdx, unitIdx) { const unit = appState.houseMap.locations[locIdx].storageUnits[unitIdx]; showModal("تعديل الوحدة", `<div dir="rtl"><label>الاسم:</label><input type="text" id="edit-unit-name" value="${unit.unitName}" class="w-full border p-3 rounded bg-slate-50"></div>`, [{text: "حفظ", class: "bg-teal-600 text-white", onClick: () => { const n = document.getElementById('edit-unit-name').value.trim(); if(n) { unit.unitName = n; saveState(); navigate('housemap'); } }}]); };
-        window.deleteStorageUnit = function(locIdx, unitIdx) { if(confirm("مسح الوحدة والرفوف؟")) { appState.houseMap.locations[locIdx].storageUnits.splice(unitIdx, 1); saveState(); navigate('housemap'); } };
+        
+        window.deleteStorageUnit = function(locIdx, unitIdx) { 
+            if(confirm("مسح الوحدة والرفوف والصور التابعة لها من السحابة؟")) { 
+                const u = appState.houseMap.locations[locIdx].storageUnits[unitIdx];
+                if(u.img) window.deleteImageFromCloud(u.img);
+                (u.shelves||[]).forEach(s => { if(s.img) window.deleteImageFromCloud(s.img); });
+                appState.houseMap.locations[locIdx].storageUnits.splice(unitIdx, 1); 
+                saveState(); navigate('housemap'); 
+            } 
+        };
+        
         window.addManualShelf = function(locIdx, unitIdx) { showModal("إضافة رف 📚", `<div dir="rtl"><label>اسم الرف:</label><input type="text" id="add-shelf-name" class="w-full border p-3 rounded bg-slate-50"></div>`, [{text: "إضافة", class: "bg-teal-600 text-white", onClick: () => { const n = document.getElementById('add-shelf-name').value.trim(); if(n) { appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves.push({ shelfName: n, items: [] }); saveState(); navigate('housemap'); } }}]); };
         window.editShelf = function(locIdx, unitIdx, shelfIdx) { const shelf = appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves[shelfIdx]; showModal("تعديل الرف", `<div dir="rtl"><label>الاسم:</label><input type="text" id="edit-shelf-name" value="${shelf.shelfName}" class="w-full border p-3 rounded bg-slate-50"></div>`, [{text: "حفظ", class: "bg-teal-600 text-white", onClick: () => { const n = document.getElementById('edit-shelf-name').value.trim(); if(n) { shelf.shelfName = n; saveState(); navigate('housemap'); } }}]); };
-        window.deleteShelf = function(locIdx, unitIdx, shelfIdx) { if(confirm("مسح الرف والأصناف؟")) { appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves.splice(shelfIdx, 1); saveState(); navigate('housemap'); } };
+        
+        window.deleteShelf = function(locIdx, unitIdx, shelfIdx) { 
+            if(confirm("مسح الرف والأصناف والصورة التابعة له من السحابة؟")) { 
+                const s = appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves[shelfIdx];
+                if(s.img) window.deleteImageFromCloud(s.img);
+                appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves.splice(shelfIdx, 1); 
+                saveState(); navigate('housemap'); 
+            } 
+        };
+
+
         window.addManualMapItem = function(locIdx, unitIdx, shelfIdx) { showModal("إضافة صنف 📦", `<div dir="rtl"><label>اسم الصنف:</label><input type="text" id="add-item-name" class="w-full border p-2 rounded mb-2"><label>الكمية:</label><input type="text" id="add-item-qty" class="w-full border p-2 rounded"></div>`, [{text: "إضافة", class: "bg-orange-500 text-white", onClick: () => { const n = document.getElementById('add-item-name').value.trim(); const q = document.getElementById('add-item-qty').value.trim(); if(n) { appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves[shelfIdx].items.push({name: n, qty: q, specificLocation: ''}); saveState(); navigate('housemap'); } }}]); };
         window.deleteMapItem = function(locIdx, unitIdx, shelfIdx, itemIdx) { appState.houseMap.locations[locIdx].storageUnits[unitIdx].shelves[shelfIdx].items.splice(itemIdx, 1); saveState(); navigate('housemap'); };
 
@@ -2650,8 +2744,7 @@ function renderInventory(c) {
                                         }
                                     }
 
-                                    const img = s.img ? `<img src="data:image/jpeg;base64,${s.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'data:image/jpeg;base64,${s.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
-                                    
+const img = s.img ? `<img src="${window.getSafeImgSrc(s.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'${window.getSafeImgSrc(s.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';                                    
                                     let fTime = s.time;
                                     if(s.time) {
                                         let [h, min] = s.time.split(':');
@@ -2713,12 +2806,11 @@ function renderInventory(c) {
         };
 
 
-        window.delSch = function(k,i) { 
-            appState.schedules[k].splice(i,1); 
-            saveState(); 
-            navigate('schedules'); 
+window.delSch = function(k,i) { 
+            const s = appState.schedules[k][i];
+            if (s && s.img) window.deleteImageFromCloud(s.img);
+            appState.schedules[k].splice(i,1); saveState(); navigate('schedules'); 
         };
-
         window.updateSchStatus = function(k, i, st) { 
             const task = appState.schedules[k][i];
             const taskStars = task.stars || 1; // استدعاء عدد النجوم الخاص بالمهمة
@@ -3367,7 +3459,7 @@ function renderBedtime(c) {
                                 <ul class="space-y-3">
                                     ${appState.goals[k].map((g, i) => {
                                         const text = typeof g === 'string' ? g : g.text;
-                                        const img = typeof g === 'object' && g.img ? `<img src="data:image/jpeg;base64,${g.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'data:image/jpeg;base64,${g.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
                                         return `
                                         <li class="flex justify-between items-start bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm">
                                             <div class="flex-1 flex flex-col">
@@ -3388,7 +3480,11 @@ function renderBedtime(c) {
             `;
         }
         function addGoal(k) { const v = document.getElementById(`goal-inp-${k}`).value; if(v){appState.goals[k].push({text: v}); saveState(); navigate('goals');} }
-        function delGoal(k, i) { appState.goals[k].splice(i,1); saveState(); navigate('goals'); }
+        window.delGoal = function(k, i) { 
+            const g = appState.goals[k][i];
+            if (typeof g === 'object' && g.img) window.deleteImageFromCloud(g.img);
+            appState.goals[k].splice(i,1); saveState(); navigate('goals'); 
+        };
 
 
 
@@ -3439,7 +3535,7 @@ function renderBedtime(c) {
                                     // لو فيه صور متعددة
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
+                                            const safeImg = window.getSafeImgSrc(imgData);
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
@@ -3868,39 +3964,33 @@ function renderBedtime(c) {
         // =====================================
         // رفع وحذف الصور المتعددة للتمارين
         // =====================================
-        window.handleWorkoutImgUpload = async function(event, uniqueId) {
+window.handleWorkoutImgUpload = async function(event, uniqueId) {
             const files = event.target.files;
             if(!files.length) return;
-            
             const preview = document.getElementById(`wo-preview-${uniqueId}`);
             if(!window.tempWorkoutImages[uniqueId]) window.tempWorkoutImages[uniqueId] = [];
-            
-            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; // مسح الرسالة الافتراضية
+            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; 
 
             const loaderId = `loader-${Date.now()}`;
             preview.insertAdjacentHTML('beforeend', `<div id="${loaderId}" class="w-12 h-12 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-slate-400 text-lg"></i></div>`);
 
             for(let i=0; i<files.length; i++) {
                 try {
-                    const b64 = await compressImageFile(files[i], 800, 0.7); // ضغط الصورة 
-                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
+                    const b64 = await compressImageFile(files[i], 800, 0.7); 
+                    const fireUrl = await window.uploadImageToCloud(b64, 'workouts');
+                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
                     window.tempWorkoutImages[uniqueId].push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                     thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                            <i class="fas fa-times text-[10px]"></i>
-                        </button>
+                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
                     `;
                     preview.appendChild(thumbDiv);
-                } catch(e) {
-                    alert("حدث خطأ أثناء معالجة إحدى صور التمرين.");
-                }
+                } catch(e) { alert("حدث خطأ أثناء معالجة الصورة."); }
             }
-            
             const loader = document.getElementById(loaderId);
             if(loader) loader.remove();
             event.target.value = ''; 
@@ -3922,32 +4012,34 @@ function renderBedtime(c) {
         // =====================================
         // رفع وحذف صور الساعة
         // =====================================
-        window.handleWatchImagesUpload = async function(event) {
+window.handleWatchImagesUpload = async function(event) {
             const files = event.target.files;
             if(!files.length) return;
             const container = document.getElementById('watch-thumbnails-container');
             if(window.tempWatchImages.length === 0) container.innerHTML = ''; 
 
+            showLoading("جاري الرفع للسحابة...");
             for(let i=0; i<files.length; i++) {
                 try {
                     const b64 = await compressImageFile(files[i], 800, 0.7);
-                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
+                    const fireUrl = await window.uploadImageToCloud(b64, 'watch_stats');
+                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
                     window.tempWatchImages.push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-20 h-20 rounded-xl overflow-hidden border border-blue-200 shadow-sm animate-fade-in group";
                     thumbDiv.id = `watch-thumb-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                            <i class="fas fa-times text-xs"></i>
-                        </button>
+                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-xs"></i></button>
                     `;
                     container.appendChild(thumbDiv);
                 } catch(e) { console.error("Error processing watch image"); }
             }
+            hideLoading();
             event.target.value = '';
         };
+
 
         window.removeWatchImage = function(imgId) {
             window.tempWatchImages = window.tempWatchImages.filter(img => img.id !== imgId);
@@ -4088,11 +4180,21 @@ function renderBedtime(c) {
             ]);
         };
 
-        window.delDailyLog = function(k, id) {
-            if(confirm('هل أنت متأكد من حذف هذه اليومية؟')) {
+window.delDailyLog = function(k, id) {
+            if(confirm('هل أنت متأكد من حذف هذه اليومية بجميع صورها من السحابة؟')) {
+                const log = appState.dailyFitness[k].find(x => x.id === id);
+                if (log) {
+                    if(log.watchImages) log.watchImages.forEach(img => window.deleteImageFromCloud(img));
+                    if(log.workouts) {
+                        log.workouts.forEach(d => {
+                            if(d.exercises) d.exercises.forEach(ex => {
+                                if(ex.imgs) ex.imgs.forEach(img => window.deleteImageFromCloud(img));
+                            });
+                        });
+                    }
+                }
                 appState.dailyFitness[k] = appState.dailyFitness[k].filter(x => x.id !== id);
-                saveState();
-                navigate('diet');
+                saveState(); navigate('diet');
             }
         };
 
@@ -7623,7 +7725,7 @@ ${cat.items.map(item => {
                                                 thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                                                 thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                                                 thumbDiv.innerHTML = `
-                                                    <img src="data:image/jpeg;base64,${imgObj.base64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${imgObj.base64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+<img src="${window.getSafeImgSrc(imgObj.base64)}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${window.getSafeImgSrc(imgObj.base64)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
                                                     <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id}); window.saveWorkoutDraft();" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
                                                         <i class="fas fa-times text-[10px]"></i>
                                                     </button>
@@ -8237,7 +8339,7 @@ ${cat.items.map(item => {
                                     let imgHtml = '<div class="w-12 h-12 rounded bg-slate-200 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fas fa-image"></i></div>';
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
+                                            const safeImg = window.getSafeImgSrc(imgData);
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
