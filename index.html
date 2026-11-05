@@ -1570,39 +1570,9 @@ function renderBudget(c) {
 
 
 
-// ==========================================
-        // ☁️ محرك الرفع الشامل على السحابة (Firebase Storage)
-        // ==========================================
-        window.getSafeImgSrc = function(imgData) {
-            if (!imgData) return '';
-            if (imgData.startsWith('http') || imgData.startsWith('data:')) return imgData;
-            return `data:image/jpeg;base64,${imgData}`;
-        };
-
-        window.uploadImageToCloud = async function(base64Data, folder = 'general') {
-            const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
-            try {
-                const byteCharacters = atob(base64Data);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], {type: "image/jpeg"});
-
-                const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-                const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
-                
-                const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': "image/jpeg" } });
-                if(!res.ok) throw new Error("مرفوض من فايربيز");
-                const data = await res.json();
-                if(data.name) return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
-                else throw new Error("لم يرجع رابط صحيح");
-            } catch(e) {
-                console.error("فشل الرفع للسحابة:", e); return `data:image/jpeg;base64,${base64Data}`; 
-            }
-        };
-
+// --- نظام إرفاق الصور للمهام والأهداف والخطط ---
         let currentImageCallback = null;
-        window.triggerItemImageUpload = function(callback, folderName = 'general') {
+        function triggerItemImageUpload(callback) {
             currentImageCallback = callback;
             let inp = document.getElementById('global-image-upload');
             if(!inp) {
@@ -1612,43 +1582,49 @@ function renderBudget(c) {
                 inp.id = 'global-image-upload';
                 inp.style.display = 'none';
                 document.body.appendChild(inp);
+                inp.onchange = async (e) => {
+                    const f = e.target.files[0];
+                    if(!f) return;
+                    showLoading("جاري ضغط وحفظ المرفق...");
+                    try {
+                        // ضغط الصورة لمقاس 600 بكسل علشان متسحبش مساحة السحابة
+                        const b64 = await compressImageFile(f, 600, 0.6); 
+                        if(currentImageCallback) currentImageCallback(b64);
+                    } catch(err) {
+                        alert("حدث خطأ أثناء رفع الصورة.");
+                    }
+                    hideLoading();
+                    inp.value = ''; // تفريغ الخانة للمرة القادمة
+                };
             }
-            inp.onchange = async (e) => {
-                const f = e.target.files[0];
-                if(!f) return;
-                showLoading("جاري الرفع على السحابة ☁️...");
-                try {
-                    const b64 = await compressImageFile(f, 800, 0.7); 
-                    const fireUrl = await window.uploadImageToCloud(b64, folderName);
-                    if(currentImageCallback) currentImageCallback(fireUrl);
-                } catch(err) {
-                    alert("حدث خطأ أثناء رفع الصورة.");
-                }
-                hideLoading();
-                inp.value = ''; 
-            };
             inp.click();
-        };
+        }
 
         window.uploadItemImage = function(section, keyOrIndex, indexIfKey) {
-            window.triggerItemImageUpload((url) => {
+            triggerItemImageUpload((b64) => {
                 if(section === 'tasks' || section === 'requests' || section === 'goals' || section === 'schedules') {
-                    const k = keyOrIndex; const i = indexIfKey;
+                    const k = keyOrIndex;
+                    const i = indexIfKey;
+                    // دعم الداتا القديمة وتحويلها لتدعم الصور
                     if(typeof appState[section][k][i] === 'string') {
-                        appState[section][k][i] = { text: appState[section][k][i], img: url };
+                        appState[section][k][i] = { text: appState[section][k][i], img: b64 };
                     } else {
-                        appState[section][k][i].img = url;
+                        appState[section][k][i].img = b64;
                     }
                 } else if (section === 'plans') {
-                    appState.futurePlans[keyOrIndex].img = url;
+                    const i = keyOrIndex;
+                    appState.futurePlans[i].img = b64;
                 }
                 saveState();
+                
+                // تحديث الشاشة بعد الرفع
                 if(section === 'tasks' || section === 'requests') navigate('tasks');
                 else if(section === 'goals') navigate('goals');
                 else if(section === 'schedules') navigate('schedules');
                 else if(section === 'plans') navigate('plans');
-            }, section);
+            });
         };
+
 
 // --- Tasks & Requests ---
         function renderTasks(c) {
@@ -1691,7 +1667,7 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="tsk-inp-${m.k}" placeholder="إضافة مهمة..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('tasks','${m.k}')" class="bg-blue-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.tasks[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+                                        const img = typeof t === 'object' && t.img ? `<img src="data:image/jpeg;base64,${t.img}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'data:image/jpeg;base64,${t.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
                                         return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
                                             <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
@@ -1732,7 +1708,7 @@ function renderPlans(c) {
                         </div>
                         <div class="space-y-4">
                             ${appState.futurePlans.map((p, i) => {
-                                onst img = p.img ? `<img src="${window.getSafeImgSrc(p.img)}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'${window.getSafeImgSrc(p.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                const img = p.img ? `<img src="data:image/jpeg;base64,${p.img}" class="w-20 h-20 object-cover rounded-lg shadow-sm cursor-pointer mt-3 border border-slate-200" onclick="showModal('صورة', '<img src=\\'data:image/jpeg;base64,${p.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
                                 return `
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-xl shadow-sm gap-4">
                                     <div class="flex-1 flex flex-col">
@@ -2074,7 +2050,7 @@ function renderHouseMap(c) {
             });
 
             // دالة مساعدة لعمل صورة مصغرة قابلة للضغط
-            const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'${window.getSafeImgSrc(imgData)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+            const thumb = (b64) => b64 ? `<img src="data:image/jpeg;base64,${b64}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
 
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20">
@@ -2225,13 +2201,13 @@ function renderHouseMap(c) {
         // =====================================
 
         // 1. رفع الصور المصغرة لمستويات الخريطة (مكان، وحدة، رف)
-       window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
-            window.triggerItemImageUpload((url) => {
-                if(level === 'loc') appState.houseMap.locations[lIdx].img = url;
-                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = url;
-                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = url;
+        window.uploadMapLevelImg = function(level, lIdx, uIdx, sIdx) {
+            triggerItemImageUpload((b64) => {
+                if(level === 'loc') appState.houseMap.locations[lIdx].img = b64;
+                if(level === 'unit') appState.houseMap.locations[lIdx].storageUnits[uIdx].img = b64;
+                if(level === 'shelf') appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img = b64;
                 saveState(); navigate('housemap');
-            }, 'housemap');
+            });
         };
 
         // 2. تدريب العقل (سجل الذكاء)
@@ -2674,7 +2650,8 @@ function renderInventory(c) {
                                         }
                                     }
 
-                                    const img = s.img ? `<img src="${window.getSafeImgSrc(s.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'${window.getSafeImgSrc(s.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                    const img = s.img ? `<img src="data:image/jpeg;base64,${s.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('المرفق', '<img src=\\'data:image/jpeg;base64,${s.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                    
                                     let fTime = s.time;
                                     if(s.time) {
                                         let [h, min] = s.time.split(':');
@@ -3390,7 +3367,7 @@ function renderBedtime(c) {
                                 <ul class="space-y-3">
                                     ${appState.goals[k].map((g, i) => {
                                         const text = typeof g === 'string' ? g : g.text;
-                                        const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                        const img = typeof g === 'object' && g.img ? `<img src="data:image/jpeg;base64,${g.img}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'data:image/jpeg;base64,${g.img}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
                                         return `
                                         <li class="flex justify-between items-start bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm">
                                             <div class="flex-1 flex flex-col">
@@ -3462,7 +3439,7 @@ function renderBedtime(c) {
                                     // لو فيه صور متعددة
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                            const safeImg = window.getSafeImgSrc(imgData);
+                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
@@ -3891,67 +3868,96 @@ function renderBedtime(c) {
         // =====================================
         // رفع وحذف الصور المتعددة للتمارين
         // =====================================
-     window.handleWorkoutImgUpload = async function(event, uniqueId) {
+        window.handleWorkoutImgUpload = async function(event, uniqueId) {
             const files = event.target.files;
             if(!files.length) return;
+            
             const preview = document.getElementById(`wo-preview-${uniqueId}`);
             if(!window.tempWorkoutImages[uniqueId]) window.tempWorkoutImages[uniqueId] = [];
-            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; 
+            
+            if(window.tempWorkoutImages[uniqueId].length === 0) preview.innerHTML = ''; // مسح الرسالة الافتراضية
 
             const loaderId = `loader-${Date.now()}`;
             preview.insertAdjacentHTML('beforeend', `<div id="${loaderId}" class="w-12 h-12 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-slate-400 text-lg"></i></div>`);
 
             for(let i=0; i<files.length; i++) {
                 try {
-                    const b64 = await compressImageFile(files[i], 800, 0.7); 
-                    const fireUrl = await window.uploadImageToCloud(b64, 'workouts');
-                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
+                    const b64 = await compressImageFile(files[i], 800, 0.7); // ضغط الصورة 
+                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
                     window.tempWorkoutImages[uniqueId].push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                     thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
+                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                            <i class="fas fa-times text-[10px]"></i>
+                        </button>
                     `;
                     preview.appendChild(thumbDiv);
-                } catch(e) { alert("حدث خطأ أثناء معالجة الصورة."); }
+                } catch(e) {
+                    alert("حدث خطأ أثناء معالجة إحدى صور التمرين.");
+                }
             }
+            
             const loader = document.getElementById(loaderId);
             if(loader) loader.remove();
             event.target.value = ''; 
         };
 
+        window.removeWorkoutImage = function(uniqueId, imgId) {
+            if(window.tempWorkoutImages[uniqueId]) {
+                window.tempWorkoutImages[uniqueId] = window.tempWorkoutImages[uniqueId].filter(img => img.id !== imgId);
+            }
+            const thumb = document.getElementById(`wo-thumb-${uniqueId}-${imgId}`);
+            if(thumb) thumb.remove();
+            
+            const preview = document.getElementById(`wo-preview-${uniqueId}`);
+            if(window.tempWorkoutImages[uniqueId].length === 0) {
+                preview.innerHTML = '<span class="text-[10px] text-slate-400 mx-auto font-bold">لم يتم إضافة صور (تظهر الثامبنايلز هنا)</span>';
+            }
+        };
+
+        // =====================================
+        // رفع وحذف صور الساعة
+        // =====================================
         window.handleWatchImagesUpload = async function(event) {
             const files = event.target.files;
             if(!files.length) return;
             const container = document.getElementById('watch-thumbnails-container');
             if(window.tempWatchImages.length === 0) container.innerHTML = ''; 
 
-            showLoading("جاري الرفع للسحابة...");
             for(let i=0; i<files.length; i++) {
                 try {
                     const b64 = await compressImageFile(files[i], 800, 0.7);
-                    const fireUrl = await window.uploadImageToCloud(b64, 'watch_stats');
-                    const imgObj = { id: Date.now() + Math.random(), base64: fireUrl };
+                    const imgObj = { id: Date.now() + Math.random(), base64: b64 };
                     window.tempWatchImages.push(imgObj);
                     
                     const thumbDiv = document.createElement('div');
                     thumbDiv.className = "relative w-20 h-20 rounded-xl overflow-hidden border border-blue-200 shadow-sm animate-fade-in group";
                     thumbDiv.id = `watch-thumb-${imgObj.id}`;
                     thumbDiv.innerHTML = `
-                        <img src="${fireUrl}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${fireUrl}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
-                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100"><i class="fas fa-times text-xs"></i></button>
+                        <img src="data:image/jpeg;base64,${b64}" class="w-full h-full object-cover cursor-pointer hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'data:image/jpeg;base64,${b64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                        <button onclick="window.removeWatchImage(${imgObj.id})" class="absolute top-0 right-0 bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-bl-xl hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
                     `;
                     container.appendChild(thumbDiv);
                 } catch(e) { console.error("Error processing watch image"); }
             }
-            hideLoading();
             event.target.value = '';
         };
 
-        
+        window.removeWatchImage = function(imgId) {
+            window.tempWatchImages = window.tempWatchImages.filter(img => img.id !== imgId);
+            const thumb = document.getElementById(`watch-thumb-${imgId}`);
+            if(thumb) thumb.remove();
+            if(window.tempWatchImages.length === 0) {
+                document.getElementById('watch-thumbnails-container').innerHTML = '<span class="text-xs text-slate-400 my-auto mx-auto font-bold">الصور المرفوعة ستظهر هنا</span>';
+            }
+        };
+
         // ==========================================
         // حفظ اليومية واستعراضها (محدثة لدعم زرار الراحة)
         // ==========================================
@@ -7617,7 +7623,7 @@ ${cat.items.map(item => {
                                                 thumbDiv.className = "relative w-14 h-14 rounded-lg overflow-hidden border border-slate-300 shadow-sm animate-fade-in shrink-0 group";
                                                 thumbDiv.id = `wo-thumb-${uniqueId}-${imgObj.id}`;
                                                 thumbDiv.innerHTML = `
-                                                    <img src="${window.getSafeImgSrc(imgObj.base64)}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${window.getSafeImgSrc(imgObj.base64)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                    <img src="data:image/jpeg;base64,${imgObj.base64}" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'data:image/jpeg;base64,${imgObj.base64}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
                                                     <button onclick="window.removeWorkoutImage('${uniqueId}', ${imgObj.id}); window.saveWorkoutDraft();" class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg hover:bg-red-600 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
                                                         <i class="fas fa-times text-[10px]"></i>
                                                     </button>
@@ -8231,7 +8237,7 @@ ${cat.items.map(item => {
                                     let imgHtml = '<div class="w-12 h-12 rounded bg-slate-200 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fas fa-image"></i></div>';
                                     if (ex.imgs && ex.imgs.length > 0) {
                                         let thumbs = ex.imgs.map(imgData => {
-                                   const safeImg = window.getSafeImgSrc(imgData);
+                                            const safeImg = `data:image/jpeg;base64,${imgData}`;
                                             return `<img src="${safeImg}" class="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 border border-slate-300 shadow-sm transition hover:scale-105" onclick="showModal('صورة التمرين', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                                         }).join('');
                                         imgHtml = `<div class="flex flex-wrap gap-2">${thumbs}</div>`;
@@ -8256,7 +8262,7 @@ ${cat.items.map(item => {
                         let watchImgsHtml = '';
                         if (log.watchImages && log.watchImages.length > 0) {
                             let wImgs = log.watchImages.map(img => {
-                                const safeImg = window.getSafeImgSrc(img);
+                                const safeImg = `data:image/jpeg;base64,${img}`;
                                 return `<img src="${safeImg}" class="w-16 h-16 rounded-lg object-cover cursor-pointer border shadow-sm hover:scale-105 transition" onclick="showModal('بيانات الساعة', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">`;
                             }).join('');
                             watchImgsHtml = `<div class="flex flex-wrap gap-2 mt-2">${wImgs}</div>`;
