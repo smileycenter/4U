@@ -18,6 +18,12 @@
 <!-- مكتبات Firebase Firestore -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
@@ -1570,61 +1576,88 @@ function renderBudget(c) {
 
 
 // ==========================================
-        // ☁️ محرك الرفع الشامل على السحابة (Firebase Storage)
+        // ☁️ محرك السحابة القاطع (رفع + حذف + مسح صور منفردة)
         // ==========================================
+        const MY_BUCKET_GS = "gs://home-9ba3b.firebasestorage.app";
+
         window.getSafeImgSrc = function(imgData) {
             if (!imgData) return '';
             if (imgData.startsWith('http') || imgData.startsWith('data:')) return imgData;
             return `data:image/jpeg;base64,${imgData}`;
         };
 
+        // 1. دالة الرفع الشاملة (بإجبار مسار الباكيت الصحيح)
         window.uploadImageToCloud = async function(base64Data, folder = 'general') {
-            const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
             try {
-                const byteCharacters = atob(base64Data);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], {type: "image/jpeg"});
-
-                const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-                const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o?name=${encodeURIComponent(safeName)}`;
+                if (typeof initFirebase === 'function') initFirebase();
+                const cleanB64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
                 
-                const res = await fetch(uploadUrl, { method: 'POST', body: blob, headers: { 'Content-Type': "image/jpeg" } });
-                if(!res.ok) throw new Error("مرفوض من فايربيز");
-                const data = await res.json();
-                if(data.name) return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodeURIComponent(data.name)}?alt=media`;
-                else throw new Error("لم يرجع رابط صحيح");
+                // إجبار الاتصال بالباكيت الخاص بك مباشرة
+                const storageRef = firebase.app().storage(MY_BUCKET_GS).ref();
+                const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                const imageRef = storageRef.child(safeName);
+                
+                await imageRef.putString(cleanB64, 'base64', { contentType: 'image/jpeg' });
+                const fireUrl = await imageRef.getDownloadURL();
+                return fireUrl;
             } catch(e) {
-                console.error("فشل الرفع للسحابة:", e); return `data:image/jpeg;base64,${base64Data}`; 
+                console.error("❌ تفاصيل خطأ السحابة:", e);
+                alert("⚠️ انتبه! لم يتم رفع الصورة للسحابة والسبب: " + e.message);
+                return `data:image/jpeg;base64,${base64Data}`; 
             }
         };
 
-
-
-// ==========================================
-        // 🗑️ محرك الحذف الشامل من السحابة (Firebase Storage)
-        // ==========================================
+// 3. دالة الحذف الشاملة من السحابة
         window.deleteImageFromCloud = async function(url) {
-            // لو مفيش رابط أو الرابط مش بتاع فايربيز، يتجاهل الحذف
             if (!url || !url.includes('firebasestorage.googleapis.com')) return;
             try {
-                const bucketUrl = appState.apiKeys.fireStorageBucket || "home-9ba3b.firebasestorage.app";
-                const startIndex = url.indexOf('/o/') + 3;
-                const endIndex = url.indexOf('?');
-                
-                // استخراج مسار الملف داخل السحابة
-                const encodedPath = endIndex > -1 ? url.substring(startIndex, endIndex) : url.substring(startIndex);
-                const deleteUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/${encodedPath}`;
-                
-                // إرسال أمر الحذف للسحابة
-                await fetch(deleteUrl, { method: 'DELETE' });
-                console.log("✅ تم الحذف من السحابة بنجاح:", decodeURIComponent(encodedPath));
+                if (typeof initFirebase === 'function') initFirebase();
+                const imageRef = firebase.storage().refFromURL(url);
+                await imageRef.delete();
+                console.log("✅ تم مسح الصورة من سيرفر جوجل بنجاح!");
             } catch (e) {
                 console.error("⚠️ فشل الحذف من السحابة:", e);
             }
         };
 
+        // 4. دالة جديدة: حذف الصورة فقط من (الطلبات، المهام، الأهداف، الجداول، الخطط) مع بقاء النص
+        window.removeSingleItemImg = async function(section, keyOrIndex, indexIfKey) {
+            if(!confirm("هل تريد حذف هذه الصورة نهائياً من السحابة؟")) return;
+            showLoading("جاري مسح الصورة من السحابة...");
+            let imgUrl = '';
+            if(section === 'tasks' || section === 'requests' || section === 'goals' || section === 'schedules') {
+                const item = appState[section][keyOrIndex][indexIfKey];
+                if(typeof item === 'object' && item.img) {
+                    imgUrl = item.img;
+                    delete item.img; // مسح الصورة وترك النص كما هو
+                }
+            } else if (section === 'plans') {
+                const item = appState.futurePlans[keyOrIndex];
+                if(item && item.img) {
+                    imgUrl = item.img;
+                    delete item.img;
+                }
+            }
+            if(imgUrl) await window.deleteImageFromCloud(imgUrl);
+            await saveState();
+            hideLoading();
+            navigate(section === 'requests' ? 'tasks' : section);
+        };
+
+        // 5. دالة جديدة: حذف الصورة فقط من (خريطة البيت) مع بقاء المكان أو الرف
+        window.removeMapLevelImg = async function(level, lIdx, uIdx, sIdx) {
+            if(!confirm("هل تريد حذف هذه الصورة نهائياً من السحابة؟")) return;
+            showLoading("جاري مسح الصورة من السحابة...");
+            let imgUrl = '';
+            if(level === 'loc') { imgUrl = appState.houseMap.locations[lIdx].img; delete appState.houseMap.locations[lIdx].img; }
+            if(level === 'unit') { imgUrl = appState.houseMap.locations[lIdx].storageUnits[uIdx].img; delete appState.houseMap.locations[lIdx].storageUnits[uIdx].img; }
+            if(level === 'shelf') { imgUrl = appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img; delete appState.houseMap.locations[lIdx].storageUnits[uIdx].shelves[sIdx].img; }
+            
+            if(imgUrl) await window.deleteImageFromCloud(imgUrl);
+            await saveState();
+            hideLoading();
+            navigate('housemap');
+        };
 
         let currentImageCallback = null;
         window.triggerItemImageUpload = function(callback, folderName = 'general') {
@@ -1678,16 +1711,14 @@ function renderBudget(c) {
 
 
 // --- Tasks & Requests ---
-        function renderTasks(c) {
+function renderTasks(c) {
             const members = [{k:'husband',n:appState.profiles.husband.name},{k:'wife',n:appState.profiles.wife.name},{k:'aseel',n:appState.profiles.aseel.name},{k:'aser',n:appState.profiles.aser.name}];
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
-    <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-list-check text-blue-600 ml-2"></i> الطلبات والمهام</h2>
+                        <button onclick="syncWithGemini('tasks')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Requests -->
@@ -1698,13 +1729,20 @@ function renderBudget(c) {
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="req-inp-${m.k}" placeholder="إضافة طلب..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('requests','${m.k}')" class="bg-pink-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.requests[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+                                        const safeSrc = typeof t === 'object' && t.img ? window.getSafeImgSrc(t.img) : '';
                                         
-return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
+                                        // 💡 هنا ضفنا الصورة وجواها زرار الحذف الأحمر (X)
+                                        const img = safeSrc ? `
+                                            <div class="relative w-14 h-14 mt-2 inline-block">
+                                                <img src="${safeSrc}" class="w-full h-full object-cover rounded-lg shadow-sm cursor-pointer border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${safeSrc}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                <button onclick="window.removeSingleItemImg('requests', '${m.k}', ${i})" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center shadow-md hover:bg-red-700 transition" title="حذف الصورة فقط من السحابة"><i class="fas fa-times"></i></button>
+                                            </div>` : '';
+                                        
+                                        return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
                                             <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
                                                 <button onclick="uploadItemImage('requests', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('requests','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="delList('requests','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition" title="حذف الطلب بالكامل"><i class="fas fa-times"></i></button>
                                             </div>
                                         </li>`;
                                     }).join('')}</ul>
@@ -1719,13 +1757,20 @@ return `<li class="flex justify-between items-start bg-slate-50 p-2 border borde
                                     <div class="flex gap-2 mb-2"><span class="font-bold text-sm w-16">${m.n}</span><input type="text" id="tsk-inp-${m.k}" placeholder="إضافة مهمة..." class="flex-1 border rounded p-1 text-sm bg-slate-50"><button onclick="addList('tasks','${m.k}')" class="bg-blue-500 text-white px-2 rounded text-xs"><i class="fas fa-plus"></i></button></div>
                                     <ul class="space-y-2 pr-16">${appState.tasks[m.k].map((t,i) => {
                                         const text = typeof t === 'string' ? t : t.text;
-                                        const img = typeof t === 'object' && t.img ? `<img src="${window.getSafeImgSrc(t.img)}" class="w-14 h-14 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${window.getSafeImgSrc(t.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+                                        const safeSrc = typeof t === 'object' && t.img ? window.getSafeImgSrc(t.img) : '';
+                                        
+                                        // 💡 وهنا كمان ضفنا الصورة وجواها زرار الحذف الأحمر (X)
+                                        const img = safeSrc ? `
+                                            <div class="relative w-14 h-14 mt-2 inline-block">
+                                                <img src="${safeSrc}" class="w-full h-full object-cover rounded-lg shadow-sm cursor-pointer border border-slate-200" onclick="showModal('صورة المرفق', '<img src=\\'${safeSrc}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                                <button onclick="window.removeSingleItemImg('tasks', '${m.k}', ${i})" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center shadow-md hover:bg-red-700 transition" title="حذف الصورة فقط من السحابة"><i class="fas fa-times"></i></button>
+                                            </div>` : '';
 
                                         return `<li class="flex justify-between items-start bg-slate-50 p-2 border border-slate-100 rounded-lg">
                                             <div class="flex-1 flex flex-col text-sm"><span class="font-semibold">${text}</span>${img}</div>
                                             <div class="flex gap-3 mt-1 mr-2">
                                                 <button onclick="uploadItemImage('tasks', '${m.k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delList('tasks','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-times"></i></button>
+                                                <button onclick="delList('tasks','${m.k}',${i})" class="text-red-400 hover:text-red-600 transition" title="حذف المهمة بالكامل"><i class="fas fa-times"></i></button>
                                             </div>
                                         </li>`;
                                     }).join('')}</ul>
@@ -1736,13 +1781,42 @@ return `<li class="flex justify-between items-start bg-slate-50 p-2 border borde
                 </div>
             `;
         }
-        function addList(type, k){ const v=document.getElementById(`${type==='tasks'?'tsk':'req'}-inp-${k}`).value; if(v){appState[type][k].push({text: v}); saveState(); navigate('tasks');} }
+
+        function addList(type, k){ 
+            const v=document.getElementById(`${type==='tasks'?'tsk':'req'}-inp-${k}`).value; 
+            if(v){appState[type][k].push({text: v}); saveState(); navigate('tasks');} 
+        }
+
+        // حذف السطر بالكامل مع صورته من السحابة
         window.delList = function(type, k, i) { 
             const item = appState[type][k][i];
             if (typeof item === 'object' && item.img) window.deleteImageFromCloud(item.img);
             appState[type][k].splice(i,1); saveState(); navigate('tasks'); 
         };
 
+        // 💡 الدالة المسؤولة عن مسح الصورة لوحدها لما تدوس على الزرار الأحمر اللي فوقيها
+        window.removeSingleItemImg = async function(section, keyOrIndex, indexIfKey) {
+            if(!confirm("هل تريد حذف هذه الصورة نهائياً من السحابة؟")) return;
+            showLoading("جاري مسح الصورة من السحابة...");
+            let imgUrl = '';
+            if(section === 'tasks' || section === 'requests' || section === 'goals' || section === 'schedules') {
+                const item = appState[section][keyOrIndex][indexIfKey];
+                if(typeof item === 'object' && item.img) {
+                    imgUrl = item.img;
+                    delete item.img; // بيمسح الصورة بس ويسيب الكلام زي ما هو
+                }
+            } else if (section === 'plans') {
+                const item = appState.futurePlans[keyOrIndex];
+                if(item && item.img) {
+                    imgUrl = item.img;
+                    delete item.img;
+                }
+            }
+            if(imgUrl) await window.deleteImageFromCloud(imgUrl);
+            await saveState();
+            hideLoading();
+            navigate(section === 'requests' ? 'tasks' : section);
+        };
 
 
 
@@ -2096,7 +2170,7 @@ const img = p.img ? `<img src="${window.getSafeImgSrc(p.img)}" class="w-20 h-20 
 // --- House Map (خريطة البيت التفاعلية بالذكاء الاصطناعي) ---
         let tempMapImages = []; 
 
-function renderHouseMap(c) {
+        function renderHouseMap(c) {
             if(!appState.houseMap) appState.houseMap = { locations: [] };
             if(!appState.houseMap.locations) appState.houseMap.locations = [];
             if(!appState.aiHouseMemory) appState.aiHouseMemory = "";
@@ -2110,8 +2184,17 @@ function renderHouseMap(c) {
                 });
             });
 
-            // دالة مساعدة لعمل صورة مصغرة قابلة للضغط
-const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-110 transition" onclick="showModal('عرض الصورة', '<img src=\\'${window.getSafeImgSrc(imgData)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">` : '';
+            // دالة عرض الصورة المصغرة مع زر الحذف السحابي المباشر
+            const thumb = (imgData, level, lIdx, uIdx, sIdx) => {
+                if (!imgData) return '';
+                const safeSrc = window.getSafeImgSrc(imgData);
+                return `
+                <div class="relative inline-block shrink-0">
+                    <img src="${safeSrc}" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg border-2 border-teal-200 shadow-sm cursor-pointer hover:scale-105 transition" onclick="showModal('عرض الصورة', '<img src=\\'${safeSrc}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                    <button onclick="event.stopPropagation(); window.removeMapLevelImg('${level}', ${lIdx}, ${uIdx}, ${sIdx})" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center shadow hover:bg-red-700 transition z-10" title="حذف الصورة من السحابة"><i class="fas fa-times"></i></button>
+                </div>`;
+            };
+
             c.innerHTML = `
                 <div class="fade-in space-y-6 pb-20">
                     <div class="flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4">
@@ -2184,64 +2267,64 @@ const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}
                     <h3 class="font-bold text-xl mt-8 text-slate-800"><i class="fas fa-sitemap ml-2"></i> هيكل المنزل المصور</h3>
                     <div class="grid grid-cols-1 gap-6" id="house-maps-container">
                         ${appState.houseMap.locations.length === 0 ? '<p class="text-center text-slate-400 py-6">لم يتم إنشاء أماكن بعد.</p>' : ''}
-                        ${appState.houseMap.locations.map((loc, locIdx) => `
+                        ${appState.houseMap.locations.map((loc, lIdx) => `
                             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                 <!-- المكان الرئيسي -->
                                 <div class="bg-slate-800 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-3">
                                     <div class="flex items-center gap-3">
-                                        ${thumb(loc.img)}
+                                        ${thumb(loc.img, 'loc', lIdx, 0, 0)}
                                         <h4 class="font-bold text-lg"><i class="fas fa-door-open ml-2 text-teal-400"></i> ${loc.name} <span class="text-xs font-normal bg-slate-600 px-2 py-1 rounded ml-2">${loc.desc || ''}</span></h4>
                                     </div>
                                     <div class="flex flex-wrap gap-2 justify-center">
-                                        <button onclick="uploadMapLevelImg('loc', ${locIdx})" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition font-bold text-xs"><i class="fas fa-camera text-teal-300"></i> صورة</button>
-                                        <button onclick="editMapLocation(${locIdx})" class="text-blue-300 hover:text-blue-100 transition font-bold text-xs bg-slate-700 px-3 py-1.5 rounded-lg"><i class="fas fa-edit"></i></button>
-                                        <button onclick="addManualStorageUnit(${locIdx})" class="text-teal-300 hover:text-teal-100 transition font-bold text-xs bg-slate-700 px-3 py-1.5 rounded-lg"><i class="fas fa-plus"></i> وحدة</button>
+                                        <button onclick="uploadMapLevelImg('loc', ${lIdx})" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition font-bold text-xs"><i class="fas fa-camera text-teal-300"></i> صورة</button>
+                                        <button onclick="editMapLocation(${lIdx})" class="text-blue-300 hover:text-blue-100 transition font-bold text-xs bg-slate-700 px-3 py-1.5 rounded-lg"><i class="fas fa-edit"></i></button>
+                                        <button onclick="addManualStorageUnit(${lIdx})" class="text-teal-300 hover:text-teal-100 transition font-bold text-xs bg-slate-700 px-3 py-1.5 rounded-lg"><i class="fas fa-plus"></i> وحدة</button>
                                         <button onclick="deleteMapLocation(${loc.id})" class="text-red-400 hover:text-red-300 transition font-bold text-xs bg-slate-700 px-3 py-1.5 rounded-lg"><i class="fas fa-trash-alt"></i></button>
                                     </div>
                                 </div>
                                 <div class="p-4 space-y-4 bg-slate-100/50">
-                                    ${(loc.storageUnits || []).map((unit, unitIdx) => `
+                                    ${(loc.storageUnits || []).map((u, uIdx) => `
                                         <!-- وحدة التخزين -->
                                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                                             <div class="p-3 bg-teal-50 border-b border-teal-100 flex flex-col md:flex-row justify-between items-center gap-2">
                                                 <div class="flex items-center gap-3">
-                                                    ${thumb(unit.img)}
-                                                    <span class="font-bold text-teal-900"><i class="fas fa-box text-teal-600 ml-1"></i> ${unit.unitName}</span>
+                                                    ${thumb(u.img, 'unit', lIdx, uIdx, 0)}
+                                                    <span class="font-bold text-teal-900"><i class="fas fa-box text-teal-600 ml-1"></i> ${u.unitName}</span>
                                                 </div>
                                                 <div class="flex gap-2">
-                                                    <button onclick="uploadMapLevelImg('unit', ${locIdx}, ${unitIdx})" class="bg-teal-100 text-teal-700 hover:bg-teal-200 px-2 py-1 rounded text-xs font-bold transition" title="صورة للوحدة"><i class="fas fa-camera"></i></button>
-                                                    <button onclick="editStorageUnit(${locIdx}, ${unitIdx})" class="text-blue-500 hover:bg-blue-50 px-2 py-1 rounded text-xs"><i class="fas fa-edit"></i></button>
-                                                    <button onclick="deleteStorageUnit(${locIdx}, ${unitIdx})" class="text-red-400 hover:bg-red-50 px-2 py-1 rounded text-xs"><i class="fas fa-trash-alt"></i></button>
+                                                    <button onclick="uploadMapLevelImg('unit', ${lIdx}, ${uIdx})" class="bg-teal-100 text-teal-700 hover:bg-teal-200 px-2 py-1 rounded text-xs font-bold transition" title="صورة للوحدة"><i class="fas fa-camera"></i></button>
+                                                    <button onclick="editStorageUnit(${lIdx}, ${uIdx})" class="text-blue-500 hover:bg-blue-50 px-2 py-1 rounded text-xs"><i class="fas fa-edit"></i></button>
+                                                    <button onclick="deleteStorageUnit(${lIdx}, ${uIdx})" class="text-red-400 hover:bg-red-50 px-2 py-1 rounded text-xs"><i class="fas fa-trash-alt"></i></button>
                                                 </div>
                                             </div>
                                             <div class="p-3 space-y-3">
-                                                ${(unit.shelves || []).map((shelf, shelfIdx) => `
-                                                    <!-- الرفوف -->
-                                                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50 relative">
-                                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-2 mb-3 gap-2">
-                                                            <div class="flex items-center gap-2">
-                                                                ${thumb(shelf.img)}
-                                                                <h5 class="font-bold text-brandOrange text-sm"><i class="fas fa-layer-group ml-1"></i> ${shelf.shelfName}</h5>
-                                                            </div>
-                                                            <div class="flex flex-wrap gap-2">
-                                                                <button onclick="uploadMapLevelImg('shelf', ${locIdx}, ${unitIdx},${shelfIdx})" class="bg-orange-100 text-orange-700 hover:bg-orange-200 px-2 py-1 rounded text-xs font-bold transition" title="صورة للرف"><i class="fas fa-camera"></i></button>
-                                                                <button onclick="addManualMapItem(${locIdx}, ${unitIdx},${shelfIdx})" class="text-xs bg-white text-orange-600 px-3 py-1 border border-orange-200 rounded hover:bg-orange-50 font-bold"><i class="fas fa-plus"></i> صنف هنا</button>
-                                                                <button onclick="editShelf(${locIdx}, ${unitIdx},${shelfIdx})" class="text-blue-400 hover:bg-blue-50 px-2 py-1 rounded text-xs"><i class="fas fa-edit"></i></button>
-                                                                <button onclick="deleteShelf(${locIdx}, ${unitIdx},${shelfIdx})" class="text-red-400 hover:bg-red-50 px-2 py-1 rounded text-xs"><i class="fas fa-trash-alt"></i></button>
-                                                            </div>
+                                            ${(u.shelves || []).map((s, sIdx) => `
+                                                <!-- الرفوف -->
+                                                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50 relative">
+                                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-2 mb-3 gap-2">
+                                                        <div class="flex items-center gap-2">
+                                                            ${thumb(s.img, 'shelf', lIdx, uIdx, sIdx)}
+                                                            <h5 class="font-bold text-brandOrange text-sm"><i class="fas fa-layer-group ml-1"></i> ${s.shelfName}</h5>
                                                         </div>
                                                         <div class="flex flex-wrap gap-2">
-                                                            ${(shelf.items || []).map((item, itemIdx) => `
-                                                                <span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs font-bold text-slate-700 shadow-sm flex items-center gap-1 group">
-                                                                    ${item.name} <span class="text-brandOrange">(${item.qty})</span>
-                                                                    <i class="fas fa-times text-slate-300 hover:text-red-500 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition" onclick="deleteMapItem(${locIdx}, ${unitIdx}, ${shelfIdx}, ${itemIdx})"></i>
-                                                                </span>
-                                                            `).join('')}
-                                                            ${(shelf.items || []).length === 0 ? '<span class="text-[10px] text-slate-400">فارغ</span>' : ''}
+                                                            <button onclick="uploadMapLevelImg('shelf', ${lIdx}, ${uIdx}, ${sIdx})" class="bg-orange-100 text-orange-700 hover:bg-orange-200 px-2 py-1 rounded text-xs font-bold transition" title="صورة للرف"><i class="fas fa-camera"></i></button>
+                                                            <button onclick="addManualMapItem(${lIdx}, ${uIdx}, ${sIdx})" class="text-xs bg-white text-orange-600 px-3 py-1 border border-orange-200 rounded hover:bg-orange-50 font-bold"><i class="fas fa-plus"></i> صنف هنا</button>
+                                                            <button onclick="editShelf(${lIdx}, ${uIdx}, ${sIdx})" class="text-blue-400 hover:bg-blue-50 px-2 py-1 rounded text-xs"><i class="fas fa-edit"></i></button>
+                                                            <button onclick="deleteShelf(${lIdx}, ${uIdx}, ${sIdx})" class="text-red-400 hover:bg-red-50 px-2 py-1 rounded text-xs"><i class="fas fa-trash-alt"></i></button>
                                                         </div>
                                                     </div>
-                                                `).join('')}
-                                                <button onclick="addManualShelf(${locIdx}, ${unitIdx})" class="text-xs text-teal-600 font-bold bg-white px-3 py-2 rounded-lg w-full hover:bg-teal-50 transition border border-teal-200 border-dashed"><i class="fas fa-plus"></i> إضافة رف جديد</button>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        ${(s.items || []).map((item, itemIdx) => `
+                                                            <span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs font-bold text-slate-700 shadow-sm flex items-center gap-1 group">
+                                                                ${item.name} <span class="text-brandOrange">(${item.qty})</span>
+                                                                <i class="fas fa-times text-slate-300 hover:text-red-500 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition" onclick="deleteMapItem(${lIdx}, ${uIdx}, ${sIdx}, ${itemIdx})"></i>
+                                                            </span>
+                                                        `).join('')}
+                                                        ${(s.items || []).length === 0 ? '<span class="text-[10px] text-slate-400">فارغ</span>' : ''}
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                            <button onclick="addManualShelf(${lIdx}, ${uIdx})" class="text-xs text-teal-600 font-bold bg-white px-3 py-2 rounded-lg w-full hover:bg-teal-50 transition border border-teal-200 border-dashed"><i class="fas fa-plus"></i> إضافة رف جديد</button>
                                             </div>
                                         </div>
                                     `).join('')}
@@ -2252,7 +2335,6 @@ const thumb = (imgData) => imgData ? `<img src="${window.getSafeImgSrc(imgData)}
                 </div>
             `;
         }
-
 
 
 
@@ -3433,17 +3515,13 @@ function renderBedtime(c) {
 
 
 // --- 2. الأهداف ---
-        function renderGoals(c) {
+window.renderGoals = function(c) {
             c.innerHTML = `
                 <div class="fade-in space-y-6">
-                    
-
-
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
-    <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
-</div>
-
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold"><i class="fas fa-bullseye text-red-600 ml-2"></i> الأهداف (Vision Board)</h2>
+                        <button onclick="syncWithGemini('goals')" class="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-magic"></i> مزامنة مع Gemini</button>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${['family', 'husband', 'wife', 'aseel', 'aser'].map(k => {
@@ -3459,7 +3537,15 @@ function renderBedtime(c) {
                                 <ul class="space-y-3">
                                     ${appState.goals[k].map((g, i) => {
                                         const text = typeof g === 'string' ? g : g.text;
-const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g.img)}" class="w-16 h-16 object-cover rounded-lg shadow-sm cursor-pointer mt-2 border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'${window.getSafeImgSrc(g.img)}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">` : '';
+                                        const safeSrc = typeof g === 'object' && g.img ? window.getSafeImgSrc(g.img) : '';
+                                        
+                                        // 💡 زرار حذف الصورة المصغر الخاص بالسحابة
+                                        const img = safeSrc ? `
+                                            <div class="relative w-16 h-16 mt-2 inline-block">
+                                                <img src="${safeSrc}" class="w-full h-full object-cover rounded-lg shadow-sm cursor-pointer border border-slate-200" onclick="showModal('صورة الهدف', '<img src=\\'${safeSrc}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق', class:'bg-slate-200'}])">
+                                                <button onclick="window.removeSingleItemImg('goals', '${k}', ${i})" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center shadow-md hover:bg-red-700 transition" title="حذف الصورة من السحابة"><i class="fas fa-times"></i></button>
+                                            </div>` : '';
+
                                         return `
                                         <li class="flex justify-between items-start bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm">
                                             <div class="flex-1 flex flex-col">
@@ -3468,7 +3554,7 @@ const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g
                                             </div>
                                             <div class="flex gap-3 mt-1 mr-2">
                                                 <button onclick="uploadItemImage('goals', '${k}', ${i})" class="text-teal-500 hover:text-teal-700 transition" title="إرفاق صورة للهدف"><i class="fas fa-camera"></i></button>
-                                                <button onclick="delGoal('${k}', ${i})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash"></i></button>
+                                                <button onclick="delGoal('${k}', ${i})" class="text-red-400 hover:text-red-600 transition" title="حذف الهدف بالكامل"><i class="fas fa-trash"></i></button>
                                             </div>
                                         </li>`;
                                     }).join('')}
@@ -3479,6 +3565,7 @@ const img = typeof g === 'object' && g.img ? `<img src="${window.getSafeImgSrc(g
                 </div>
             `;
         }
+
         function addGoal(k) { const v = document.getElementById(`goal-inp-${k}`).value; if(v){appState.goals[k].push({text: v}); saveState(); navigate('goals');} }
         window.delGoal = function(k, i) { 
             const g = appState.goals[k][i];
@@ -3996,19 +4083,18 @@ window.handleWorkoutImgUpload = async function(event, uniqueId) {
             event.target.value = ''; 
         };
 
-        window.removeWorkoutImage = function(uniqueId, imgId) {
+window.removeWorkoutImage = async function(uniqueId, imgId) {
             if(window.tempWorkoutImages[uniqueId]) {
-                window.tempWorkoutImages[uniqueId] = window.tempWorkoutImages[uniqueId].filter(img => img.id !== imgId);
-            }
-            const thumb = document.getElementById(`wo-thumb-${uniqueId}-${imgId}`);
-            if(thumb) thumb.remove();
-            
-            const preview = document.getElementById(`wo-preview-${uniqueId}`);
-            if(window.tempWorkoutImages[uniqueId].length === 0) {
-                preview.innerHTML = '<span class="text-[10px] text-slate-400 mx-auto font-bold">لم يتم إضافة صور (تظهر الثامبنايلز هنا)</span>';
+                const imgObj = window.tempWorkoutImages[uniqueId].find(x => x.id === imgId);
+                // مسح من السحابة فوراً
+                if(imgObj && imgObj.base64) await window.deleteImageFromCloud(imgObj.base64);
+                
+                window.tempWorkoutImages[uniqueId] = window.tempWorkoutImages[uniqueId].filter(x => x.id !== imgId);
+                const thumb = document.getElementById(`wo-thumb-${uniqueId}-${imgId}`);
+                if(thumb) thumb.remove();
+                window.saveWorkoutDraft(); // حفظ التعديل
             }
         };
-
         // =====================================
         // رفع وحذف صور الساعة
         // =====================================
@@ -4041,13 +4127,14 @@ window.handleWatchImagesUpload = async function(event) {
         };
 
 
-        window.removeWatchImage = function(imgId) {
-            window.tempWatchImages = window.tempWatchImages.filter(img => img.id !== imgId);
+window.removeWatchImage = async function(imgId) {
+            const imgObj = window.tempWatchImages.find(x => x.id === imgId);
+            // مسح من السحابة فوراً
+            if(imgObj && imgObj.base64) await window.deleteImageFromCloud(imgObj.base64);
+            
+            window.tempWatchImages = window.tempWatchImages.filter(x => x.id !== imgId);
             const thumb = document.getElementById(`watch-thumb-${imgId}`);
             if(thumb) thumb.remove();
-            if(window.tempWatchImages.length === 0) {
-                document.getElementById('watch-thumbnails-container').innerHTML = '<span class="text-xs text-slate-400 my-auto mx-auto font-bold">الصور المرفوعة ستظهر هنا</span>';
-            }
         };
 
         // ==========================================
@@ -5597,6 +5684,7 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
             if(res) window.appendSmartChatMsg('ai', res, color);
         };
 
+// 1. حفظ جلسات التدبر (القرآن والأحاديث والتسوق) وإرسالها للسحابة فوراً
         window.saveSmartChatSession = function() {
             if(!appState.savedDeepChats) appState.savedDeepChats = { quran: [], hadith: [], shopping: [], assistant: [], wardrobe: [] };
             if(!appState.savedDeepChats[currentSmartSession.type]) appState.savedDeepChats[currentSmartSession.type] = [];
@@ -5605,19 +5693,32 @@ if(document.getElementById('set-shopping')) appState.settings.shoppingDay = docu
             if(index > -1) appState.savedDeepChats[currentSmartSession.type][index] = currentSmartSession;
             else appState.savedDeepChats[currentSmartSession.type].unshift(currentSmartSession);
             
+            // 💡 حفظ فوري على سحابة Firestore لكي تظهر على جميع الأجهزة
             saveState(); 
-            showModal("تم الحفظ بنجاح 💾", "<p class='text-center font-bold text-slate-700 py-4'>تم حفظ المحادثة في السجل بنجاح! يمكنك العودة إليها لاحقاً.</p>", [{text: "علم", class: "bg-teal-600 text-white"}]);
             
+            showModal("تم الحفظ السحابي بنجاح ☁️💾", "<p class='text-center font-bold text-slate-700 py-4'>تم حفظ الجلسة وتأمينها على السحابة بنجاح! يمكنك فتحها من أي جهاز آخر.</p>", [{text: "علم", class: "bg-teal-600 text-white"}]);
+            
+            // إعادة توجيه حسب القسم
             const cArea = document.getElementById('content-area');
-            if(cArea && cArea.innerHTML.includes('الستايلست الذكي') && currentSmartSession.type === 'wardrobe') {
-                navigate('wardrobe');
-            } else if (cArea && currentSmartSession.type === 'shopping') {
+            if(cArea && currentSmartSession.type === 'shopping') {
                 navigate('shopping');
             } else if (cArea && currentSmartSession.type === 'quran') {
                 navigate('quran');
             } else if (cArea && currentSmartSession.type === 'hadith') {
                 navigate('hadith');
             }
+        };
+
+        // 2. دالة مسح جلسة من الأرشيف مع التحديث السحابي
+        window.delSmartChat = function(type, id) {
+            showModal("مسح الجلسة 🗑️", "<p class='text-center text-red-600 font-bold py-4'>هل أنت متأكد من مسح هذه الجلسة من الأرشيف والسحابة نهائياً؟</p>", [
+                {text: "إلغاء", class: "bg-slate-200 text-slate-800"},
+                {text: "نعم، امسح", class: "bg-red-600 text-white", onClick: () => {
+                    appState.savedDeepChats[type] = appState.savedDeepChats[type].filter(c => c.id !== id);
+                    saveState(); // مزامنة الحذف مع السحابة
+                    window.viewChatHistory(type); 
+                }}
+            ]);
         };
 
         window.viewChatHistory = function(type) {
@@ -6532,18 +6633,18 @@ window.closeQuranPlayer = function() {
         // ==========================================
 
         // 1. تغيير حالة القطعة (لبس / سلة / نظيف)
-        window.changeItemState = function(id, newState) {
+window.changeItemState = function(id, newState) {
             const item = appState.wardrobe.find(i => i.id === id);
             if(item) {
                 item.state = newState;
                 if(newState === 'worn') {
                     item.lastWorn = new Date().toLocaleDateString('ar-EG');
                 }
+                // ☁️ الحفظ الفوري للسحابة لكي تظهر على اللابتوب أو أي جهاز آخر
                 saveState();
                 navigate('wardrobe');
             }
         };
-
         // 2. غسيل كل القطع اللي في السلة (ترجع نظيفة للدولاب)
         window.washAllDirty = function() {
             appState.wardrobe.forEach(item => {
@@ -6872,6 +6973,20 @@ window.renderWardrobe = function(c) {
                         <button onclick="window.openSmartChat('wardrobe', 'شات الستايلست', 'أنت ستايلست شخصي. ساعدني في اختيار ملابسي وتنسيق الألوان وتطوير مظهري بناءً على طولي (${wSet.height}) ووزني (${wSet.weight}).')" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-indigo-200 transition flex items-center gap-2"><i class="fas fa-comments"></i> شات الستايلست المخصص</button>
                     </div>
 
+<!-- 🤖 محرك البحث الذكي بالذكاء الاصطناعي في الدولاب -->
+<div class="bg-indigo-50 p-4 rounded-2xl border border-indigo-200 shadow-sm mb-6">
+    <h3 class="font-bold text-indigo-900 text-base mb-2 flex items-center gap-2">
+        <i class="fas fa-wand-magic-sparkles text-indigo-600"></i> البحث الذكي بالذكاء الاصطناعي في الدولاب
+    </h3>
+    <div class="flex gap-2">
+        <input type="text5" id="wardrobe-ai-search-input" placeholder="اكتب إنت بتدور على إيه؟ (مثال: طقم رسمي للعمل، تيشيرت خروج خفيف...)" class="flex-1 border border-indigo-300 p-3 rounded-xl outline-none bg-white text-sm font-semibold shadow-inner focus:border-indigo-500">
+        <button onclick="window.searchWardrobeByAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center gap-2 shrink-0">
+            <i class="fas fa-search"></i> بحث ذكي
+        </button>
+    </div>
+    <div id="wardrobe-ai-search-results" class="mt-3 hidden"></div>
+</div>
+
                     <!-- شريط أدوات التحديد المتعدد العائم -->
                     <div id="bulk-action-bar" class="hidden fixed left-1/2 transform -translate-x-1/2 bg-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-700 flex-wrap justify-center items-center gap-2 transition-all w-[95%] max-w-lg flex" style="bottom: 120px; z-index: 9999;">
                         <div class="text-white font-bold px-3 py-1 border-b md:border-b-0 md:border-l border-slate-600 flex items-center justify-center w-full md:w-auto mb-1 md:mb-0">محدد (<span id="bulk-count" class="text-brandOrange mx-1">0</span>)</div>
@@ -7042,6 +7157,82 @@ ${cat.items.map(item => {
             }
             hideLoading();
         };
+
+
+
+window.searchWardrobeByAI = async function() {
+            const query = document.getElementById('wardrobe-ai-search-input').value.trim();
+            const resContainer = document.getElementById('wardrobe-ai-search-results');
+            
+            if(!query) {
+                alert("يرجى كتابة وصف للشيء الذي تبحث عنه أولاً!");
+                return;
+            }
+            if(!appState.wardrobe || appState.wardrobe.length === 0) {
+                alert("دولاب الملابس فارغ حالياً!");
+                return;
+            }
+
+            resContainer.classList.remove('hidden');
+            resContainer.innerHTML = `<div class="text-center text-indigo-700 font-bold py-4"><i class="fas fa-spinner fa-spin text-xl ml-2"></i> جاري البحث والتدقيق في قطع الدولاب بالذكاء الاصطناعي...</div>`;
+
+            // تجهيز بيانات الدولاب كقائمة نصية مبسطة ليفهمها الذكاء الاصطناعي
+            const wardrobeSummary = appState.wardrobe.map((item, idx) => {
+                return `رقم القطعة: ${idx} | التصنيف: ${item.category || 'غير محدد'} | اللون: ${item.color || 'غير محدد'} | الوصف/الاسم: ${item.name || item.desc || 'بدون وصف'} | الموسم: ${item.season || 'الكل'}`;
+            }).join('\n');
+
+            const prompt = `
+            لديك قائمة بقطع الملابس الموجودة في دولاب المستخدم كالتالي:
+            ${wardrobeSummary}
+
+            المستخدم يبحث عن القطعة التالية بناءً على وصفه: "${query}"
+            
+            مطلوب منك:
+            1. تحليل وصف المستخدم ومقارنته بقطع الدولاب.
+            2. اختيار أقرب وأنسب القطع مطابقة (يمكنك اختيار أكثر من قطعة لو كانت تكون طقماً مناسباً).
+            3. إرجاع النتائج على شكل أرقام القطع (Indexes) فقط مفصولة بفواصل، بدون أي شرح إضافي (مثلاً: 0, 2, 5). إذا لم تجد أي تطابق تام، اعرض أقرب القطع.
+            `;
+
+            try {
+                // استدعاء محرك Gemini الذكي المتوفر في التطبيق
+                const aiResponse = await askAI(prompt, null, "text", "جاري البحث...");
+                
+                // استخلاص أرقام الـ Indexes من رد الذكاء الاصطناعي
+                const matchedIndices = aiResponse.replace(/[^0-9,]/g, '').split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+
+                if(matchedIndices.length === 0) {
+                    resContainer.innerHTML = `<div class="bg-white p-4 rounded-xl border border-indigo-200 text-slate-700 text-center font-bold">عذراً، لم أجد قطعة مطابقة لهذا الوصف في الدولاب. جرب وصفاً آخر!</div>`;
+                    return;
+                }
+
+                // عرض القطع المطابقة التي عثر عليها الذكاء الاصطناعي
+                let html = `<div class="bg-white p-4 rounded-xl border border-indigo-200 shadow-sm"><h4 class="font-bold text-indigo-800 text-sm mb-3">🎯 نتائج البحث الذكي المطابقة (${matchedIndices.length} قطعة):</h4><div class="grid grid-cols-2 md:grid-cols-4 gap-3">`;
+
+                matchedIndices.forEach(idx => {
+                    const item = appState.wardrobe[idx];
+                    if(item) {
+                        const safeImg = window.getSafeImgSrc(item.img);
+                        html += `
+                            <div class="bg-slate-50 border border-slate-200 rounded-xl p-2 flex flex-col items-center text-center shadow-sm relative group">
+                                <img src="${safeImg}" class="w-20 h-20 object-cover rounded-lg mb-2 border cursor-pointer hover:scale-105 transition" onclick="showModal('صورة القطعة', '<img src=\\'${safeImg}\\' class=\\'w-full rounded-xl\\'>', [{text:'إغلاق',class:'bg-slate-200'}])">
+                                <span class="font-bold text-xs text-slate-800 truncate w-full">${item.name || item.category || 'قطعة ملابس'}</span>
+                                <span class="text-[10px] text-slate-500">${item.color || ''} | ${item.season || ''}</span>
+                            </div>
+                        `;
+                    }
+                });
+
+                html += `</div><div class="mt-3 text-left"><button onclick="document.getElementById('wardrobe-ai-search-results').classList.add('hidden')" class="text-xs text-slate-500 hover:text-slate-700 font-bold">إخفاء النتائج</button></div></div>`;
+                resContainer.innerHTML = html;
+
+            } catch(e) {
+                console.error("خطأ في البحث الذكي:", e);
+                resContainer.innerHTML = `<div class="bg-red-50 text-red-600 p-3 rounded-xl font-bold text-center text-sm">حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. تأكد من مفتاح الـ API.</div>`;
+            }
+        };
+
+
+
 
 // ==========================================
         // 5. نافذة سؤال المناسبة (من داخل التطبيق)
@@ -8765,7 +8956,35 @@ function runAutoResets() {
 
 
 
+// ==========================================
+        // 🔄 المزامنة التلقائية الفورية عند فتح البرنامج على أي جهاز
+        // ==========================================
+        window.syncFromCloudOnStartup = async function() {
+            if (typeof initFirebase === 'function' && initFirebase() && db) {
+                try {
+                    console.log("🔄 جاري سحب أحدث البيانات من السحابة...");
+                    const doc = await db.collection('familyData').doc('appState').get();
+                    if (doc.exists) {
+                        const cloudData = doc.data();
+                        // دمج بيانات السحابة مع الحفاظ على المفاتيح
+                        appState = Object.assign({}, appState, cloudData);
+                        localStorage.setItem('familyAppSuperMax', JSON.stringify(appState));
+                        
+                        // تحديث الشاشة الحالية لعرض البيانات الجديدة فوراً
+                        const currentTab = document.querySelector('.nav-btn.bg-teal-700')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || 'budget';
+                        navigate(currentTab);
+                        console.log("✅ تمت المزامنة من السحابة بنجاح!");
+                    }
+                } catch (e) {
+                    console.error("⚠️ خطأ في سحب البيانات من السحابة:", e);
+                }
+            }
+        };
 
+        // تشغيل السحب التلقائي بمجرد فتح الصفحة
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(window.syncFromCloudOnStartup, 1000);
+        });
 
 
 
